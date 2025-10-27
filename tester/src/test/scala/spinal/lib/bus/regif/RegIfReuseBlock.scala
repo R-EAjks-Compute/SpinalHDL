@@ -41,12 +41,12 @@ class RegIfReuseBlock extends Component {
   val REG2 = busif.newRegAt(0x300, "reg2")
   val reg32bit_2 = REG2.field(Bits(32 bit), RW, 0, doc = "field2 test ...")
 
-  busif.accept(DocHtml("regif"))
-  busif.accept(DocJson("regif"))
-  busif.accept(DocRalf("regif"))
-  busif.accept(DocCHeader("regif", ""))
-  busif.accept(DocSVHeader("regif", ""))
-  busif.accept(DocSystemRdl("regif"))
+  busif.accept(DocHtml("reuseblk"))
+  busif.accept(DocJson("reuseblk"))
+  busif.accept(DocRalf("reuseblk"))
+  busif.accept(DocCHeader("reuseblk", ""))
+  busif.accept(DocSVHeader("reuseblk", ""))
+  busif.accept(DocSystemRdl("reuseblk"))
 }
 
 object RegIfReuseBlockTesterMain extends App{
