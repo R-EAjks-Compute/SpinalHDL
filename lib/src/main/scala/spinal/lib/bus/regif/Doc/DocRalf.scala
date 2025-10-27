@@ -10,7 +10,7 @@ final case class DocRalf(name : String, backdoor: Boolean = true) extends BusIfD
          |block ${this.name} {
          |  endian little;
          |  bytes ${bi.busByteWidth};
-         |${bi.regSlicesNotReuse.map(_.toRalf(tab = "  ")).mkString("\n")};
+         |${bi.regSlicesNotReuse.map(_.toRalf()).mkString("\n")};
          |${groupRalf(bi.reuseGroupsById)}
          |}""".stripMargin
   }
@@ -20,12 +20,13 @@ final case class DocRalf(name : String, backdoor: Boolean = true) extends BusIfD
       reg match {
         case ram: RamInst => toRamRalf(ram, base, tab)
         case reg: RegInst => toRegRalf(reg, base, tab)
+        case _ => toRegRalf(reg, base, tab)
       }
     }
 
     def toRamRalf(ram: RamInst, base: BigInt, tab: String = ""): String = {
       val hdlpath = if(backdoor) s"(${ram.getName()})" else ""
-      s"""${tab}  memory ${ram.upperName()} ${hdlpath} @'h${ram.getAddr().toString(16).toUpperCase} {
+      s"""${tab}  memory ${ram.upperName()} ${hdlpath} @'h${(ram.getAddr() - base).toString(16).toUpperCase} {
          |${tab}    size  ${ram.getSize()};
          |${tab}    bits  ${ram.bi.busDataWidth};
          |${tab}    access rw;
@@ -34,7 +35,7 @@ final case class DocRalf(name : String, backdoor: Boolean = true) extends BusIfD
 
     def toRegRalf(reg: RegSlice, base: BigInt = 0, tab: String = ""): String = {
         s"""${tab}  register ${reg.upperName()} @'h${(reg.getAddr() - base).toString(16).toUpperCase} {
-           |${reg.getFields().map(_.toRalf(tab*2)).mkString("\n")}
+           |${reg.getFields().map(_.toRalf(tab + "  ")).mkString("\n")}
            |${tab}  }""".stripMargin
     }
   }
