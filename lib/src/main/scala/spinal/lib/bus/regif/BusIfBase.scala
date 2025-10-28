@@ -81,7 +81,7 @@ trait BusIfBase extends Area{
     val sortedLists = regSliceLists.sortBy(_.head.addr)
 
     val listWithIndex = sortedLists.map { list =>
-      val gap = list.last.addr + list.last.size - list.head.addr
+      val gap = list.last.nextAddr - list.head.addr
       val startIndex = list.head.addr / gap
       (list, startIndex)
     }
