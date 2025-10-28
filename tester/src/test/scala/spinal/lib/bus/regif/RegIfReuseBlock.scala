@@ -38,6 +38,31 @@ class RegIfReuseBlock extends Component {
     busif.resetBlockTag()
   }
 
+  (0 to 4).foreach{ i =>
+    busif.newBlockTag( s"r${i}")("MYBLK")
+    val MYREG = busif.newReg("myreg")(SymbolName(s"MYREG${i}"))
+    val myreg = MYREG.field(Bits(32 bit), RW, 0 , doc = "...")(SymbolName(s"myreg${i}")).asOutput()
+    busif.resetBlockTag()
+  }
+
+
+  busif.newBlockTag( s"r${9}")("MYBLK")
+  val MYREG = busif.newRegAt(0x2E0, "myreg")(SymbolName(s"MYREG${9}"))
+  val myreg = MYREG.field(Bits(32 bit), RW, 0 , doc = "...")(SymbolName(s"myreg${9}")).asOutput()
+  val MYREG1 = busif.newReg("myreg")(SymbolName(s"MYREG${9}"))
+  val myreg1 = MYREG1.field(Bits(32 bit), RW, 0 , doc = "...")(SymbolName(s"myreg${9}")).asOutput()
+  busif.resetBlockTag()
+
+  (0 to 4).foreach{i =>
+    busif.newBlockTag( s"r${20+i}")("MYBLK")
+    val MYREG = busif.newRegAt(0x400 + i *4*2, "myreg")(SymbolName(s"MYREG${20+i}"))
+    val myreg = MYREG.field(Bits(32 bit), RW, 0 , doc = "...")(SymbolName(s"myreg${20+i*2}")).asOutput()
+    val MYREG1 = busif.newReg("myreg")(SymbolName(s"MYREG${9}"))
+    val myreg1 = MYREG1.field(Bits(32 bit), RW, 0 , doc = "...")(SymbolName(s"myreg${20+i*2+1}")).asOutput()
+    busif.resetBlockTag()
+  }
+
+
   val REG2 = busif.newRegAt(0x300, "reg2")
   val reg32bit_2 = REG2.field(Bits(32 bit), RW, 0, doc = "field2 test ...")
 

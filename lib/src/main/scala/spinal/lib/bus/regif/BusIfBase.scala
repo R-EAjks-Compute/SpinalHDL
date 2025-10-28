@@ -60,6 +60,53 @@ trait BusIfBase extends Area{
 
   def mwdata(sec: Range): Bits = if(withStrb) writeData(sec) & wmask(sec) else writeData(sec)
 
+  /**
+   * Finds continuous blocks of RegSlice lists based on their starting addresses.
+   *
+   * This function groups consecutive lists of RegSlice objects that have continuous
+   * starting addresses. It calculates the gap between consecutive blocks automatically
+   * using the formula: gap = last.addr + last.size - head.addr, then determines
+   * continuity based on the index derived from head.addr / gap.
+   *
+   * Commonly used in hardware design automation for generating parameterized files
+   * like .h/.svh/.ralf/.html where continuous memory/register blocks need to be
+   * grouped for efficient code generation.
+   *
+   * @param regSliceLists List of RegSlice lists to be analyzed
+   * @return List of tuples containing (starting RegSlice list, continuous block length)
+   */
+  def findContinuousBlocks(regSliceLists: List[List[RegSlice]]): List[(List[RegSlice], Int)] = {
+    if (regSliceLists.isEmpty) return List.empty
+
+    val sortedLists = regSliceLists.sortBy(_.head.addr)
+
+    val listWithIndex = sortedLists.map { list =>
+      val gap = list.last.addr + list.last.size - list.head.addr
+      val startIndex = list.head.addr / gap
+      (list, startIndex)
+    }
+
+    val result = scala.collection.mutable.ListBuffer[(List[RegSlice], Int)]()
+    var i = 0
+
+    while (i < listWithIndex.length) {
+      val currentStartList = listWithIndex(i)._1
+      val currentStartIndex = listWithIndex(i)._2
+      var continuousLength = 1
+      var j = i + 1
+
+      while (j < listWithIndex.length && listWithIndex(j)._2 == currentStartIndex + continuousLength) {
+        continuousLength += 1
+        j += 1
+      }
+
+      result += ((currentStartList, continuousLength))
+      i = j
+    }
+
+    result.toList
+  }
+
   def initStrbMasks() = {
     if (withStrb) {
       (0 until strbWidth).foreach { i =>
