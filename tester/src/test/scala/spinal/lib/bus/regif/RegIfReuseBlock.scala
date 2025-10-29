@@ -47,7 +47,7 @@ class RegIfReuseBlock extends Component {
 
 
   busif.newBlockTagAt(0x2E0, s"r${9}")("MYBLK")
-  val MYREG = busif.newReg("myreg")(SymbolName(s"MYREG${9}"))
+  val MYREG = busif.newRegAt(0x2E0, "myreg")(SymbolName(s"MYREG${9}"))
   val myreg = MYREG.field(Bits(32 bit), RW, 0 , doc = "...")(SymbolName(s"myreg${9}")).asOutput()
   val MYREG1 = busif.newReg("myreg")(SymbolName(s"MYREG${9}"))
   val myreg1 = MYREG1.field(Bits(32 bit), RW, 0 , doc = "...")(SymbolName(s"myreg${9}")).asOutput()
@@ -63,8 +63,11 @@ class RegIfReuseBlock extends Component {
   }
 
 
-  val REG2 = busif.newRegAt(0x300, "reg2")
+  val REG2 = busif.newRegAt(0x500, "reg2")
   val reg32bit_2 = REG2.field(Bits(32 bit), RW, 0, doc = "field2 test ...")
+
+  val REG3 = busif.newRegAt(0x2f0, "reg2")
+  val REG4 = busif.newRegAt(0x2fc, "reg2")
 
   busif.accept(DocHtml("reuseblk"))
   busif.accept(DocJson("reuseblk"))

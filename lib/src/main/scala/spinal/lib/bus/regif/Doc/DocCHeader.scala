@@ -9,7 +9,7 @@ final case class DocCHeader(name : String,
                             override val prefix: String = "",
                             regType : String = "u32", //unsigned int
                             withshiftmask: Boolean = true,
-                            reuseDefDecNewWay: Boolean = true) extends BusIfDoc {
+                            reuseDefDecOldWay: Boolean = false) extends BusIfDoc {
   override val suffix: String = "h"
 
   def guardName : String = s"__${name.toUpperCase()}_REGIF_H__"
@@ -29,7 +29,7 @@ final case class DocCHeader(name : String,
         |
         |${normalRegSlices.map(_.define(maxnamelen, maxshiftlen)).mkString("\n")}
         |
-        |${if(reuseDefDecNewWay) reuseDeclareFunc(reuseGroupsById) else reuseDeclare(reuseGroupsById)}
+        |${if(!reuseDefDecOldWay) reuseDeclareFunc(reuseGroupsById) else reuseDeclare(reuseGroupsById)}
         |
         |${normalRegSlices.map(_.union).mkString("\n")}
         |

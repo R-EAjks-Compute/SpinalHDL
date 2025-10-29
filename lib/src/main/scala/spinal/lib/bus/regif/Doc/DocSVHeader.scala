@@ -34,32 +34,6 @@ final case class DocSVHeader(name : String,
   }
 
   def reuseDeclare(lst: Map[String, Map[Int, List[RegSlice]]]) = {
-
-//    def base(name: String, t: RegSlice, max: Int) = {
-//      val alignName = s"%-${max}s".format(t.reuseTag.instName)
-//      val defineName = s"${name}_base_${alignName}".toUpperCase()
-//      s"`define ${defineName}  'h${t.reuseTag.baseAddr.hexString()}"
-//    }
-//
-//    lst.map{ t =>
-//      val partName = t._1
-////      val decPart: List[RegSlice]  = t._2.head._2
-//      val decPart: List[RegSlice]  = t._2.toList.sortBy(_._1).head._2
-//      val heads : List[RegSlice] = t._2.map(_._2.head).toList.sortBy(_.reuseTag.id)
-//
-//      val instNameMaxLens = heads.map(_.reuseTag.instName.size).max
-//      val maxnamelen = decPart.map(_.getName().size).max + prefix.length
-//      val maxshiftlen = decPart.map(t => t.getName().size + t.fdNameLens).max + prefix.length
-//
-//      s"""
-//        |/* part '${partName}' declare --> */
-//        |${heads.map(t => base(partName, t, instNameMaxLens)).mkString("\n")}
-//        |/* part '${partName}' defines */
-//        |${decPart.map(_.baseDefine(maxnamelen, maxshiftlen)).mkString("\n")}
-//        |/* <--- part '${partName}' declare */
-//        |""".stripMargin
-//    }.mkString("")
-
     lst.map { t =>
       val grpName = t._1
       val grps: List[List[RegSlice]] = t._2.toList.sortBy(_._1).map(_._2)
@@ -91,11 +65,6 @@ final case class DocSVHeader(name : String,
       s"""`define ${preFixRegName} ${_tab}'h${reg.getAddr().hexString(16)}${fddefine(maxshiftlen)}""".stripMargin
     }
 
-//    def baseDefine(maxreglen: Int, maxshiftlen: Int) = {
-//      val _tab = " " * (maxreglen - deDupRegName.size)
-//      s"""`define ${preFixRegName}(base)  ${_tab}base + 'h${(reg.getAddr() - reg.reuseTag.baseAddr).hexString(8)}${fddefine(maxshiftlen)}""".stripMargin
-//    }
-//
     def baseDefFunc(maxreglen: Int, maxshiftlen: Int, inAddr: BigInt): String = {
       val _tab = " " * (maxreglen - deDupRegName.size)
       s"""`define ${preFixRegName}(base, size, i)  ${_tab}((base) + ((size) * (i)) + 'h${inAddr.hexString(8)}${fddefine(maxshiftlen)}""".stripMargin
