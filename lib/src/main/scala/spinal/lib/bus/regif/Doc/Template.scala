@@ -120,10 +120,15 @@ object HtmlTemplate {
       |      a:hover {
       |          color:#09f;
       |      }
+      |      .header-line{
+      |          position: sticky;
+      |          top: 0;
+      |          z-index: 10;
+      |      }
       |""".stripMargin
   def tableHead(hasBlock: Boolean = true) =
     s"""
-      |      <thead>
+      |      <thead class="header-line">
       |        <tr align="center" >${if(hasBlock)"\n          <th>ReUseBlock</th>" else ""}
       |          <th>Group</th>
       |          <th>AddressOffset</th>
