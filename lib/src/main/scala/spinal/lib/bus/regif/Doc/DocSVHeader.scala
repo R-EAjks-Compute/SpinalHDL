@@ -37,11 +37,10 @@ final case class DocSVHeader(name : String,
     lst.map { t =>
       val grpName = t._1
       val grps: List[List[RegSlice]] = t._2.toList.sortBy(_._1).map(_._2)
-      val basePart = bi.findContinuousBlocks(grps).zipWithIndex.map{ case((grp, num), i) =>
-        val grpGap = grp.last.nextAddr - grp.head.addr
-        val id = if(i == 0) "" else s"${i}"
+      val basePart = bi.groupConsecutiveBlocks(grps).zipWithIndex.map{ case((grp, num, gap), i) =>
+        val id = if(i == 0) "" else s"_${grp.head.reuseTag.instName.toUpperCase()}"
         s"""`define ${grpName.toUpperCase()}${id}_BASE  'h${grp.head.addr.hexString()}
-           |`define ${grpName.toUpperCase()}${id}_SIZE  'h${grpGap.hexString()}
+           |`define ${grpName.toUpperCase()}${id}_SIZE  'h${gap.hexString()}
            |`define ${grpName.toUpperCase()}${id}_NUM   'h${num}""".stripMargin
       }.mkString("\n")
 

@@ -61,50 +61,75 @@ trait BusIfBase extends Area{
   def mwdata(sec: Range): Bits = if(withStrb) writeData(sec) & wmask(sec) else writeData(sec)
 
   /**
-   * Finds continuous blocks of RegSlice lists based on their starting addresses.
-   *
-   * This function groups consecutive lists of RegSlice objects that have continuous
-   * starting addresses. It calculates the gap between consecutive blocks automatically
-   * using the formula: gap = last.addr + last.size - head.addr, then determines
-   * continuity based on the index derived from head.addr / gap.
-   *
-   * Commonly used in hardware design automation for generating parameterized files
-   * like .h/.svh/.ralf/.html where continuous memory/register blocks need to be
-   * grouped for efficient code generation.
-   *
-   * @param regSliceLists List of RegSlice lists to be analyzed
-   * @return List of tuples containing (starting RegSlice list, continuous block length)
+   * Gap-aware run-length encoding algorithm (Enhanced: Added block size consistency check)
+   * @param blocks Input list of blocks, each block is a consecutive list of Reg
+   * @param tolerance Tolerance span L, intervals exceeding this tolerance will break continuity
+   * @return List of triples (first block, consecutive block count, interval)
    */
-  def findContinuousBlocks(regSliceLists: List[List[RegSlice]]): List[(List[RegSlice], Int)] = {
-    if (regSliceLists.isEmpty) return List.empty
+  def groupConsecutiveBlocks(blocks: List[List[RegSlice]]): List[(List[RegSlice], Int, Int)] = {
+    val gaps = blocks.map(_.head.addr)
+      .sliding(2)
+      .collect { case List(a, b) => (b - a).toInt }
+      .toList
+    val freqGap = gaps.groupBy(identity).map(_._2).toList.sortBy(-_.size).head.head
+    val L = (1 << log2Up(freqGap/bw)) * bw * 2  //Tolerance is 2 * gap
+    grupConsecutiveBlocks(blocks, L)
+  }
 
-    val sortedLists = regSliceLists.sortBy(_.head.addr)
+  def grupConsecutiveBlocks(blocks: List[List[RegSlice]], tolerance: Int): List[(List[RegSlice], Int, Int)] = {
+    if (blocks.isEmpty) return Nil
 
-    val listWithIndex = sortedLists.map { list =>
-      val gap = list.last.nextAddr - list.head.addr
-      val startIndex = list.head.addr / gap
-      (list, startIndex)
-    }
+    // Get the starting address (value of the first Reg) and size of each block
+    val starts = blocks.map(block => block.head.addr)
+    val sizes = blocks.map(_.size)
 
-    val result = scala.collection.mutable.ListBuffer[(List[RegSlice], Int)]()
+    var result = List.empty[(List[RegSlice], Int, Int)]
     var i = 0
 
-    while (i < listWithIndex.length) {
-      val currentStartList = listWithIndex(i)._1
-      val currentStartIndex = listWithIndex(i)._2
-      var continuousLength = 1
-      var j = i + 1
+    while (i < blocks.length) {
+      val firstBlock = blocks(i)
+      val firstSize = sizes(i)
+      var currentCount = 1
+      var currentGap: Option[Int] = None
+      var j = i
 
-      while (j < listWithIndex.length && listWithIndex(j)._2 == currentStartIndex + continuousLength) {
-        continuousLength += 1
+      // Try to extend the current group
+      while (j < blocks.length - 1) {
+        val gapVal = (starts(j + 1) - starts(j)).toInt
+        val nextSize = sizes(j + 1)
+
+        // Check continuity conditions: interval within tolerance and same block size
+        if (gapVal <= tolerance && firstSize == nextSize) {
+          if (currentCount == 1) {
+            // Only one block in current group, can try to establish new group
+            currentGap = Some(gapVal)
+            currentCount += 1
+          } else {
+            // Multiple blocks already in current group, check if interval is consistent
+            if (gapVal == currentGap.get) {
+              currentCount += 1  // Consistent interval, continue expanding group
+            } else {
+              // Interval inconsistent, end current group
+              j = blocks.length // Break out of loop
+            }
+          }
+        } else {
+          // Interval exceeds tolerance or different block size, end current group
+          j = blocks.length // Break out of loop
+        }
         j += 1
       }
 
-      result += ((currentStartList, continuousLength))
-      i = j
+      // Determine output interval: use inter-block interval for multi-block groups,
+      // use block size for single-block groups
+      val outputGap = if (currentCount > 1) currentGap.get else firstSize
+      result = result :+ (firstBlock, currentCount, outputGap)
+
+      // Move to next group
+      i += currentCount
     }
 
-    result.toList
+    result
   }
 
   def initStrbMasks() = {

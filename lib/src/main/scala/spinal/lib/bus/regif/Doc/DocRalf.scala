@@ -43,23 +43,23 @@ final case class DocRalf(name : String, backdoor: Boolean = true) extends BusIfD
   def groupRalf(lst: Map[String, Map[Int, List[RegSlice]]]) = {
     lst.map{t =>
       val grpName = t._1
-
       val grps: List[List[RegSlice]] = t._2.toList.sortBy(_._1).map(_._2)
 
-      def grpRalf(grp: List[RegSlice], grpBase: BigInt, grpNum: Int): String = {
+      def grpRalf(grp: List[RegSlice], grpBase: BigInt, grpNum: Int, gap: Int, blockid:String = ""): String = {
         if (grp.size == 1){
           grp.head.toRalf(arraySize = grpNum)
         } else if(grpNum == 1) {
           grp.map(_.toRalf()).mkString("\n")
         } else {
-          s"""  regfile ${grpName}[${grpNum}] @'h${grpBase.hexString()} {
+          s"""  regfile ${grpName}${blockid}[${grpNum}] @'h${grpBase.hexString()} +${gap} {
              |${grp.map(_.toRalf(grpBase, tab = "  ")).mkString("\n")}
              |  }""".stripMargin
         }
       }
 
-      bi.findContinuousBlocks(grps).map{ case (grp, num) =>
-        grpRalf(grp, grp.head.addr, num)
+      bi.groupConsecutiveBlocks(grps).zipWithIndex.map{ case ((grp, num, gap), i) =>
+        val blockid = if(i == 0) "" else s"_${grp.head.reuseTag.instName.toUpperCase()}"
+        grpRalf(grp, grp.head.addr, num, gap, blockid)
       }.mkString("\n")
 
     }.mkString("\n")
