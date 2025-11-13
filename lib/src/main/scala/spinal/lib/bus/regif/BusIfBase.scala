@@ -67,9 +67,11 @@ trait BusIfBase extends Area{
    * @return List of triples (first block, consecutive block count, interval)
    */
   def groupConsecutiveBlocks(blocks: List[List[RegSlice]]): List[(List[RegSlice], Int, Int)] = {
-    val gaps = blocks.map(_.head.addr)
+    if (blocks.isEmpty) return Nil
+    if (blocks.size == 1) return List((blocks.head, 1, (blocks.head.last.nextAddr - blocks.head.head.addr).toInt))
+    val gaps = blocks
       .sliding(2)
-      .collect { case List(a, b) => (b - a).toInt }
+      .collect { case List(a, b) => (b.last.nextAddr - a.head.addr).toInt }
       .toList
     val freqGap = gaps.groupBy(identity).map(_._2).toList.sortBy(-_.size).head.head
     val L = (1 << log2Up(freqGap/bw)) * bw * 2  //Tolerance is 2 * gap
@@ -78,10 +80,9 @@ trait BusIfBase extends Area{
 
   def grupConsecutiveBlocks(blocks: List[List[RegSlice]], tolerance: Int): List[(List[RegSlice], Int, Int)] = {
     if (blocks.isEmpty) return Nil
-
     // Get the starting address (value of the first Reg) and size of each block
     val starts = blocks.map(block => block.head.addr)
-    val sizes = blocks.map(_.size)
+    val sizes = blocks.map(t => (t.last.nextAddr - t.head.addr).toInt)
 
     var result = List.empty[(List[RegSlice], Int, Int)]
     var i = 0
