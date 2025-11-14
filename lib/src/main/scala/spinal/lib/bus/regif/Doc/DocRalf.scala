@@ -19,13 +19,13 @@ final case class DocRalf(name : String, backdoor: Boolean = true) extends BusIfD
     def toRalf(base: BigInt = 0, tab: String = "", arraySize: Int = 1): String = {
       val arrayStr = if(arraySize == 1) "" else s"[${arraySize}]"
       reg match {
-        case ram: RamInst => toRamRalf(ram, base, tab, arrayStr)
+        case ram: RamInst => toRamRalf(ram, base, tab)
         case reg: RegInst => toRegRalf(reg, base, tab, arrayStr)
         case _ => toRegRalf(reg, base, tab, arrayStr)
       }
     }
 
-    def toRamRalf(ram: RamInst, base: BigInt, tab: String = "", arrayStr: String = ""): String = {
+    def toRamRalf(ram: RamInst, base: BigInt, tab: String = ""): String = {
       s"""${tab}  memory ${ram.upperName()} @'h${(ram.getAddr() - base).toString(16).toUpperCase} {
          |${tab}    size  ${ram.getSize()};
          |${tab}    bits  ${ram.bi.busDataWidth};
@@ -46,12 +46,23 @@ final case class DocRalf(name : String, backdoor: Boolean = true) extends BusIfD
       val grps: List[List[RegSlice]] = t._2.toList.sortBy(_._1).map(_._2)
 
       def grpRalf(grp: List[RegSlice], grpBase: BigInt, grpNum: Int, gap: Int, blockid:String = ""): String = {
+        def toRamArrayRalf(ram: RamInst, grpBase: BigInt, tab: String, grpNum: Int): String = {
+          s"""  block ${grpName}${blockid}[${grpNum}] @'h${grpBase.hexString()} +${gap} {
+             |${ram.toRalf(grpBase, tab="  ")}
+             |  }""".stripMargin
+        }
+
         if (grp.size == 1){
-          grp.head.toRalf(arraySize = grpNum)
+          val inst = grp.head
+          (inst, grpNum) match {
+            case (ram: RamInst, 1) => ram.toRalf(arraySize = 1)
+            case (ram: RamInst, _) => toRamArrayRalf(ram, grpBase, tab = "  ", grpNum)
+            case (_, _) => inst.toRalf(arraySize = grpNum)
+          }
         } else if(grpNum == 1) {
           grp.map(_.toRalf()).mkString("\n")
         } else {
-          s"""  regfile ${grpName}${blockid}[${grpNum}] @'h${grpBase.hexString()} +${gap} {
+          s"""  block ${grpName}${blockid}[${grpNum}] @'h${grpBase.hexString()} +${gap} {
              |${grp.map(_.toRalf(grpBase, tab = "  ")).mkString("\n")}
              |  }""".stripMargin
         }
