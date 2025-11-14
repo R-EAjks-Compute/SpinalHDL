@@ -6,7 +6,11 @@ import spinal.lib._
 final case class DocRalf(name : String, backdoor: Boolean = true) extends BusIfDoc {
   override val suffix: String = "ralf"
   override def body(): String = {
-      s"""
+      s""" /*
+         | * ${header}
+         | * use `ralgen -t top_name -uvm xxx.ralf  -o out/xxx` generate uvm class
+         | * Reg Interface Ralf [AUTOGENERATE by SpinalHDL]
+         | */
          |block ${this.name} {
          |  endian little;
          |  bytes ${bi.bw};
