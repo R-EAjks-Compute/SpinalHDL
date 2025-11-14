@@ -9,7 +9,7 @@ final case class DocRalf(name : String, backdoor: Boolean = true) extends BusIfD
       s"""
          |block ${this.name} {
          |  endian little;
-         |  bytes ${bi.busByteWidth};
+         |  bytes ${bi.bw};
          |${bi.regSlicesNotReuse.map(_.toRalf()).mkString("\n")};
          |${groupRalf(bi.reuseGroupsById)}
          |}""".stripMargin
@@ -48,6 +48,7 @@ final case class DocRalf(name : String, backdoor: Boolean = true) extends BusIfD
       def grpRalf(grp: List[RegSlice], grpBase: BigInt, grpNum: Int, gap: Int, blockid:String = ""): String = {
         def toRamArrayRalf(ram: RamInst, grpBase: BigInt, tab: String, grpNum: Int): String = {
           s"""  block ${grpName}${blockid}[${grpNum}] @'h${grpBase.hexString()} +${gap} {
+             |    bytes ${bi.bw};
              |${ram.toRalf(grpBase, tab="  ")}
              |  }""".stripMargin
         }
@@ -63,6 +64,7 @@ final case class DocRalf(name : String, backdoor: Boolean = true) extends BusIfD
           grp.map(_.toRalf()).mkString("\n")
         } else {
           s"""  block ${grpName}${blockid}[${grpNum}] @'h${grpBase.hexString()} +${gap} {
+             |    bytes ${bi.bw};
              |${grp.map(_.toRalf(grpBase, tab = "  ")).mkString("\n")}
              |  }""".stripMargin
         }
