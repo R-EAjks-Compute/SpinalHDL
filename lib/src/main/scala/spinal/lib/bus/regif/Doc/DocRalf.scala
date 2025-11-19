@@ -3,7 +3,7 @@ package spinal.lib.bus.regif
 import spinal.lib._
 
 
-final case class DocRalf(name : String, backdoor: Boolean = true) extends BusIfDoc {
+final case class DocRalf(name : String, backdoor: Boolean = true, flatten: Boolean = false) extends BusIfDoc {
   override val suffix: String = "ralf"
   override def body(): String = {
       s"""#
@@ -14,8 +14,8 @@ final case class DocRalf(name : String, backdoor: Boolean = true) extends BusIfD
          |block ${this.name} {
          |  endian little;
          |  bytes ${bi.bw};
-         |${bi.regSlicesNotReuse.map(_.toRalf()).mkString("\n")};
-         |${groupRalf(bi.reuseGroupsById)}
+         |${if(flatten) bi.orderdRegInsts.map(_.toRalf()).mkString(";\n") else bi.regSlicesNotReuse.map(_.toRalf()).mkString("\n")};
+         |${if(flatten) "" else groupRalf(bi.reuseGroupsById)}
          |}""".stripMargin
   }
 

@@ -94,6 +94,7 @@ class RegIfReuseBlock extends Component {
   busif.accept(DocHtml("reuseblk"))
   busif.accept(DocJson("reuseblk"))
   busif.accept(DocRalf("reuseblk"))
+  busif.accept(DocRalf("reuseblk2", flatten = true))
   busif.accept(DocCHeader("reuseblk", ""))
   busif.accept(DocSVHeader("reuseblk", ""))
   busif.accept(DocSystemRdl("reuseblk"))
