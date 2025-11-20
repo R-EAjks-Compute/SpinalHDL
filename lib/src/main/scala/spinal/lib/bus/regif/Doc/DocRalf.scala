@@ -14,7 +14,7 @@ final case class DocRalf(name : String, backdoor: Boolean = true, flatten: Boole
          |block ${this.name} {
          |  endian little;
          |  bytes ${bi.bw};
-         |${if(flatten) bi.orderdRegInsts.map(_.toRalf()).mkString(";\n") else bi.regSlicesNotReuse.map(_.toRalf()).mkString("\n")};
+         |${if(flatten) bi.orderdRegInsts.map(_.toRalf()).mkString("\n") else bi.regSlicesNotReuse.map(_.toRalf()).mkString("\n")};
          |${if(flatten) "" else groupRalf(bi.reuseGroupsById)}
          |}""".stripMargin
   }
