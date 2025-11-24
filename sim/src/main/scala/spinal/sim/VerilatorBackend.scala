@@ -255,6 +255,7 @@ public:
     uint32_t timeCheck;
     bool waveEnabled;
     bool gotFinish;
+    std::string wavePath;
     VerilatedContext* contextp;  // Restore context support
     V${config.toplevelName} *top;
     ISignalAccess *signalAccess[${config.signals.length}];
@@ -275,6 +276,7 @@ public:
       time = 0;
       gotFinish = false;
       top = new V${config.toplevelName}();
+      this->wavePath = std::string(wavePath);
       
       timeCheck = 0;
       lastFlushAt = high_resolution_clock::now();
@@ -312,7 +314,7 @@ ${    val signalInits = for((signal, id) <- config.signals.zipWithIndex) yield {
       tfp.close();
       #endif
       #ifdef COVERAGE
-      VerilatedCov::write((("${new File(config.vcdPath).getAbsolutePath.replace("\\","\\\\")}/${if(config.vcdPrefix != null) config.vcdPrefix + "_" else ""}") + name + ".dat").c_str());
+      VerilatedCov::write((wavePath + name + ".dat").c_str());
       #endif
     }
 
