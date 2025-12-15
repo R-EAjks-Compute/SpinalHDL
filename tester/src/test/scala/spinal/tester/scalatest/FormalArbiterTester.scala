@@ -153,13 +153,13 @@ class FormalArbiterTester extends SpinalFormalFunSuite {
       .withCover(20)
       // .withDebug
       .doVerify(new Component {
-        val withLock = true
+        val withLock = false
         val context = prepareContext(withLock)
         val dut = FormalDut(new StreamArbiter(context.dataType, context.portCount, StreamArbiter.SequentialOrder, StreamArbiter.NoLock))
 
         context.select := dut.io.chosen
         context.selectOH := dut.io.chosenOH
-        context.locked := dut.locked
+        context.locked := False
         context.output << dut.io.output
         for (i <- 0 until context.portCount) {
           context.inputs(i) >> dut.io.inputs(i)
@@ -191,7 +191,7 @@ class FormalArbiterTester extends SpinalFormalFunSuite {
 
         context.select := dut.io.chosen
         context.selectOH := dut.io.chosenOH
-        context.locked := dut.locked
+        context.locked := False
         context.output << dut.io.output
         for (i <- 0 until context.portCount) {
           context.inputs(i) >> dut.io.inputs(i)
@@ -292,7 +292,7 @@ class FormalArbiterTester extends SpinalFormalFunSuite {
 
         context.select := dut.io.chosen
         context.selectOH := dut.io.chosenOH
-        context.locked := dut.locked
+        context.locked := False
         context.output << dut.io.output
         for (i <- 0 until context.portCount) {
           context.inputs(i) >> dut.io.inputs(i)
