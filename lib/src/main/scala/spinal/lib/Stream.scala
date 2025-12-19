@@ -909,7 +909,7 @@ class StreamArbiter[T <: Data](dataType: HardType[T],
     val chosenOH = out Bits (portCount bit)
   }
   import StreamArbiter._
-  val lockFlagEnable = portCount > 1 && lockPolicy != NoLock
+  val lockFlagEnable = portCount > 1 && lockPolicy != NoLock && arbitrationPolicy != AssumeOhInput
   var maskLockFlagEnable = lockFlagEnable
   if(arbitrationPolicy == RoundRobin) maskLockFlagEnable = portCount > 1
 
