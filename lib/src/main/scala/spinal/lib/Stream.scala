@@ -1925,13 +1925,14 @@ class StreamShiftChain[T <: Data](dataType: HardType[T], length: Int) extends Co
     val push          = slave  Stream(dataType)
     val pop           = master Stream(dataType)
     val states        = Vec(master Flow(dataType), length)
+    val clear         = in Bool() default(False)
   }
 
   def builder(prev: Stream[T], left: Int): List[Stream[T]] = {
     left match {
       case 0 => Nil
       case 1 => prev :: Nil
-      case _ => prev :: builder(prev.stage(), left - 1)
+      case _ => prev :: builder(prev.m2sPipe(flush = io.clear), left - 1)
     }
   }
   val connections = Vec(builder(io.push, length))
