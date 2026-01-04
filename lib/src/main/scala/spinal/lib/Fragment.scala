@@ -67,7 +67,7 @@ class StreamFragmentPimped[T <: Data](pimped: Stream[Fragment[T]]) {
  */
   def reduce[U <: Data](identity: U, accumulator: (U, U, T) => Unit): Stream[U] = {
     val next = new Stream(identity).setCompositeName(pimped, "reduced", true)
-    val acc = Reg(identity)
+    val acc = RegInit(identity)
     
     accumulator(next.payload, acc, pimped.fragment)
     
