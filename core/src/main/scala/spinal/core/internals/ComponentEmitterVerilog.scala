@@ -945,12 +945,12 @@ class ComponentEmitterVerilog(
                     }
                     if(emitScope)  b ++= s"${tab}  end\n"
                   })
+                  b ++= s"${tab}  default : begin\n"
                   if (nextScope == switchStatement.defaultScope) {
-                    b ++= s"${tab}  default : begin\n"
                     statementIndex = emitLeafStatements(statements, statementIndex, switchStatement.defaultScope, assignmentKind, b, tab + "    ")
                     nextScope = findSwitchScope()
-                    b ++= s"${tab}  end\n"
                   }
+                  b ++= s"${tab}  end\n"
                   b ++= s"${tab}endcase\n"
                 }
               }
