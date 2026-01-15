@@ -1339,8 +1339,10 @@ class StreamFork[T <: Data](dataType: HardType[T], portCount: Int, synchronous: 
 class StreamForkArea[T <: Data](input : Stream[T], outputs : Seq[Stream[T]], synchronous: Boolean = false) extends Area {
   val portCount = outputs.size
   /*Used for async, Store if an output stream already has taken its value or not */
-  val linkEnable = if(!synchronous)Vec(RegInit(True),portCount)else null
-  if (synchronous) {
+  val linkEnable = if(!synchronous && portCount > 1) Vec(RegInit(True), portCount) else null
+  if (portCount == 1) {
+    outputs.head << input
+  } else if (synchronous) {
     input.ready := outputs.map(_.ready).reduce(_ && _)
     outputs.foreach(_.valid := input.valid && input.ready)
     outputs.foreach(_.payload := input.payload)
