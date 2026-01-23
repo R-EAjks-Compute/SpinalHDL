@@ -55,6 +55,8 @@ abstract class BitVector extends BaseType with Widthable {
 
   def bitsRange: Range = 0 until getWidth
 
+  def reversed : this.type
+
   /** Logical OR of all bits */
 //  def orR: Bool = this.asBits =/= 0
   def orR: Bool = {
@@ -299,33 +301,52 @@ abstract class BitVector extends BaseType with Widthable {
   }
 
   /**
-    * Split the BitVector into x slice
-    * @example {{{ val res = myBits.subdiviedIn(3 slices) }}}
-    * @param sliceCount the width of the slice
-    * @return a Vector of slices
-    */
-  def subdivideIn(sliceCount: SlicesCount, strict : Boolean): Vec[T] = {
-    require(!strict || this.getWidth % sliceCount.value == 0)
-    val sliceWidth = widthOf(this) / sliceCount.value + (if(widthOf(this) % sliceCount.value != 0) 1 else 0)
-    val w = getWidth
-    Vec((0 until sliceCount.value).map(i => this(i * sliceWidth, (w-i * sliceWidth) min sliceWidth bits).asInstanceOf[T]))
+   * Split the BitVector into x slice
+   *
+   * @example {{{ val res = myBits.subdivideIn(3 slices) }}}
+   * @param sliceCount the width of the slice
+   * @param strict     allow `subdivideIn` to generate vectors with varying size
+   * @return a Vector of slices
+   */
+  def subdivideIn(sliceCount: SlicesCount, strict: Boolean): Vec[T] = {
+    val width = getWidth
+    val dividesEvenly = width % sliceCount.value == 0
+    require(!strict || dividesEvenly,
+      s"subdivideIn can't evenly divide $width bit into ${sliceCount.value} slices as required by strict=true")
+    val sliceWidth = width / sliceCount.value + (if (!dividesEvenly) 1 else 0)
+    Vec(
+      (0 until sliceCount.value)
+        .map(i => this (i * sliceWidth, (width - i * sliceWidth) min sliceWidth bits).asInstanceOf[T])
+    )
   }
 
   /**
-    * Split the BitVector into slice of x bits
-    * * @example {{{ val res = myBits.subdiviedIn(3 bits) }}}
-    * @param sliceWidth the width of the slice
-    * @return a Vector of slices
-    */
-  def subdivideIn(sliceWidth: BitCount, strict : Boolean): Vec[T] = {
-    require(!strict || this.getWidth % sliceWidth.value == 0)
-    subdivideIn((this.getWidth + sliceWidth.value - 1) / sliceWidth.value slices, strict)
+   * Split the BitVector into slice of x bits
+   *
+   * @example {{{ val res = myBits.subdivideIn(3 bits) }}}
+   * @param sliceWidth the width of the slice
+   * @param strict     allow `subdivideIn` to generate vectors with varying size
+   * @return a Vector of slices
+   */
+  def subdivideIn(sliceWidth: BitCount, strict: Boolean): Vec[T] = {
+    val width = widthOf(this)
+    require(!strict || width % sliceWidth.value == 0,
+      s"subdivideIn can't evenly divide $width bit into ${sliceWidth.value} bit slices, as required by strict=true")
+    Vec(
+      (0 until width by sliceWidth.value)
+        .map(i => this.apply(i until ((i + sliceWidth.value) min width)).asInstanceOf[T])
+    )
   }
 
 
   def subdivideIn(sliceCount: SlicesCount): Vec[T] = subdivideIn(sliceCount, true)
   def subdivideIn(sliceWidth: BitCount): Vec[T] = subdivideIn(sliceWidth, true)
 
+
+  private def copyAnalogTagTo[T <: Data](that : T) : T = {
+    if(this.isAnalog) that.setAsAnalog()
+    that
+  }
   /** Extract a bit of the BitVector */
   def newExtract(bitId: Int, extract: BitVectorBitAccessFixed): Bool = {
     extract.source = this
@@ -334,13 +355,13 @@ abstract class BitVector extends BaseType with Widthable {
     val bool = wrapWithBool(extract)
 
     bool.compositeAssign = new Assignable {
-      override private[core] def assignFromImpl(that: AnyRef, target: AnyRef, kind : AnyRef)(implicit loc: Location): Unit = that match {
+      override protected def assignFromImpl(that: AnyRef, target: AnyRef, kind : AnyRef)(implicit loc: Location): Unit = that match {
         case that: Bool         => BitVector.this.compositAssignFrom(that,BitAssignmentFixed(BitVector.this, bitId), kind)
         //        case that: DontCareNode => BitVector.this.assignFrom(that, BitAssignmentFixed(BitVector.this, new DontCareNodeFixed(Bool(), 1), bitId), conservative = true)
       }
       override def getRealSourceNoRec: BaseType = BitVector.this
     }
-    bool
+    copyAnalogTagTo(bool)
   }
 
   /** Extract a bit of the BitVector */
@@ -349,18 +370,18 @@ abstract class BitVector extends BaseType with Widthable {
     extract.bitId = bitId
     val bool =  wrapWithBool(extract)
     bool.compositeAssign = new Assignable  {
-      override private[core] def assignFromImpl(that: AnyRef, target: AnyRef, kind : AnyRef)(implicit loc: Location): Unit = that match {
+      override protected def assignFromImpl(that: AnyRef, target: AnyRef, kind : AnyRef)(implicit loc: Location): Unit = that match {
         case x: Bool         => BitVector.this.compositAssignFrom(that, BitAssignmentFloating(BitVector.this, bitId), kind)
 //        case x: DontCareNode => BitVector.this.assignFrom(that,BitAssignmentFloating(BitVector.this, new DontCareNodeFixed(Bool(), 1), bitId), true)
       }
       override def getRealSourceNoRec: BaseType = BitVector.this
     }
-    bool
+    copyAnalogTagTo(bool)
   }
 
   /** Extract a range of bits of the BitVector */
   def newExtract(hi: Int, lo: Int, accessFactory: => BitVectorRangedAccessFixed): this.type = {
-    if (hi - lo + 1 != 0) {
+    copyAnalogTagTo(if (hi - lo + 1 != 0) {
       val access = accessFactory
       access.source = this
       access.hi     = hi
@@ -382,17 +403,18 @@ abstract class BitVector extends BaseType with Widthable {
     }
     else
       getZeroUnconstrained
+    )
   }
 
   /** Extract a range of bits of the BitVector */
   def newExtract(offset: UInt, size: Int, extract : BitVectorRangedAccessFloating)(implicit loc: Location): this.type = {
-    if (size != 0) {
+    copyAnalogTagTo(if (size != 0) {
       extract.source = this
       extract.size   = size
       extract.offset = offset
       val ret = wrapWithWeakClone(extract)
       ret.compositeAssign = new Assignable {
-        override private[core] def assignFromImpl(that: AnyRef, target: AnyRef, kind : AnyRef)(implicit loc: Location): Unit = target match {
+        override protected def assignFromImpl(that: AnyRef, target: AnyRef, kind : AnyRef)(implicit loc: Location): Unit = target match {
           case x: BitVector                => BitVector.this.compositAssignFrom(that,RangedAssignmentFloating(BitVector.this, offset, size), kind)
 //          case x: DontCareNode             => BitVector.this.assignFrom(that,new RangedAssignmentFloating(BitVector.this, new DontCareNodeFixed(BitVector.this, size), offset, size bit), true)
           case x: BitAssignmentFixed       => BitVector.this.apply(offset + x.bitId).compositAssignFrom(that, BitVector.this, kind)
@@ -406,6 +428,7 @@ abstract class BitVector extends BaseType with Widthable {
     }
     else
       getZeroUnconstrained
+    )
   }
 
   def getZeroUnconstrained: this.type
@@ -465,9 +488,9 @@ abstract class BitVector extends BaseType with Widthable {
   }
 
   /** Set all bits */
-  def setAll(): this.type
+  override def setAll(): this.type
   /** Clear all bits */
-  def clearAll(): this.type = {
+  override def clearAll(): this.type = {
     this := this.getZeroUnconstrained
     this
   }

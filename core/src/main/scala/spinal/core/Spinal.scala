@@ -50,7 +50,10 @@ case class DumpWaveConfig(depth: Int = 0, vcdPath: String = "wave.vcd")
 /**
  * target device
  */
-case class Device(vendor: String = "?", family: String = "?", name: String = "?"){
+case class Device(vendor: String = "?",
+                  family: String = "?",
+                  name: String = "?",
+                  supportBootResetKind : Boolean = true){
   def isVendorDefault = vendor == "?"
 }
 object Device{
@@ -58,7 +61,10 @@ object Device{
   val XILINX = Device(vendor = "xilinx")
   val LATTICE = Device(vendor = "lattice")
   val ACTEL = Device(vendor = "actel")
+  val ASIC = Device(vendor = "asic", supportBootResetKind = false)
   val NONE = Device(vendor = "none")
+
+  def get = GlobalData.get.config.device
 }
 
 
@@ -131,7 +137,7 @@ case class SpinalConfig(mode                           : SpinalMode = null,
                         defaultConfigForClockDomains   : ClockDomainConfig = ClockDomainConfig(),
                         onlyStdLogicVectorAtTopLevelIo : Boolean = false,
                         defaultClockDomainFrequency    : IClockDomainFrequency = UnknownFrequency(),
-                        targetDirectory                : String = ".",
+                        targetDirectory                : String = SpinalConfig.defaultTargetDirectory,
                         oneFilePerComponent            : Boolean = false,
                         netlistFileName                : String = null,
                         dumpWave                       : DumpWaveConfig = null,
@@ -158,6 +164,7 @@ case class SpinalConfig(mode                           : SpinalMode = null,
                         headerWithRepoHash             : Boolean = true,
                         removePruned                   : Boolean = false,
                         allowOutOfRangeLiterals        : Boolean = false,
+                        dontCareGenAsZero              : Boolean = false,
                         phasesInserters                : ArrayBuffer[(ArrayBuffer[Phase]) => Unit] = ArrayBuffer[(ArrayBuffer[Phase]) => Unit](),
                         transformationPhases           : ArrayBuffer[Phase] = ArrayBuffer[Phase](),
                         memBlackBoxers                 : ArrayBuffer[Phase] = ArrayBuffer[Phase] (/*new PhaseMemBlackBoxerDefault(blackboxNothing)*/),
@@ -166,7 +173,9 @@ case class SpinalConfig(mode                           : SpinalMode = null,
                         private [core] var _withEnumString : Boolean = true,
                         var enumPrefixEnable           : Boolean = true,
                         var enumGlobalEnable           : Boolean = false,
-                        bitVectorWidthMax              : Int = 4096
+                        bitVectorWidthMax              : Int = 4096,
+                        var singleTopLevel             : Boolean = true,
+                        var noAssertAtTimeZero         : Boolean = false
 ){
   def generate       [T <: Component](gen: => T): SpinalReport[T] = Spinal(this)(gen)
   def generateVhdl   [T <: Component](gen: => T): SpinalReport[T] = Spinal(this.copy(mode = VHDL))(gen)
@@ -262,6 +271,8 @@ object SpinalConfig{
       case None         => ???
     }
   }
+
+  var defaultTargetDirectory: String = System.getenv().getOrDefault("SPINAL_TARGET_DIR", ".")
 }
 
 

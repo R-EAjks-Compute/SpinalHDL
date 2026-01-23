@@ -134,10 +134,10 @@ abstract class Resize extends Expression with WidthProvider {
   override def getWidth: Int = size
 
   override def simplifyNode: Expression = {
-    if(input.getWidth == 0){
-      getLiteralFactory(0,size)
-    } else {
-      this
+    input.getWidth match {
+      case 0 => getLiteralFactory(0, size)
+      case s if s == size => input //Useless resize
+      case _ => this
     }
   }
 
@@ -591,6 +591,13 @@ object Operator {
       }
       override def calcWidth: Int = Math.max(0, source.getWidth - shift)
       override def toString() = s"(${super.toString()})[$getWidth bits]"
+      override def simplifyNode: Expression = {
+        if(shift == 0){
+          source
+        } else {
+          this
+        }
+      }
     }
 
     abstract class ShiftRightByUInt extends BinaryOperatorWidthableInputs with Widthable with ShiftOperator {
@@ -2297,7 +2304,9 @@ object BitsLiteral {
     val minimalWidth   = Math.max(poisonBitCount,valueBitCount)
     var bitCount       = specifiedBitCount
 
-    if (value < 0) throw new Exception("literal value is negative and cannot be represented")
+    if (value < 0) {
+      throw new Exception("literal value is negative and cannot be represented")
+    }
 
     if (bitCount != -1) {
       if (minimalWidth > bitCount) throw new Exception(s"literal 0x${value.toString(16)} can't fit in Bits($specifiedBitCount bits)")
@@ -2452,7 +2461,7 @@ abstract class BitVectorLiteral() extends Literal with WidthProvider {
     val hexCount = scala.math.ceil(bitCount/4.0).toInt
     val alignCount = if (aligin) (hexCount * 4) else bitCount
     val unsignedValue = if(value >= 0) value else ((BigInt(1) << alignCount) + value)
-    if(value == 0) "0" else s"%${hexCount}s".format(unsignedValue.toString(16)).replace(' ','0')
+    s"%${hexCount}s".format(unsignedValue.toString(16)).replace(' ','0')
   }
 
 

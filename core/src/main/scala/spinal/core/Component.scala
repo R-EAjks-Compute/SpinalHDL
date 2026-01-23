@@ -47,6 +47,7 @@ object Component {
 
   def toplevel : Component = {
     var ptr = Component.current
+    if(ptr == null) ptr = GlobalData.get.toplevel
     while(ptr.parent != null) ptr = ptr.parent
     ptr
   }
@@ -69,8 +70,14 @@ object Component {
   * @see  [[http://spinalhdl.github.io/SpinalDoc/spinal/core/components_hierarchy Component Documentation]]
   */
 abstract class Component extends NameableByComponent with ContextUser with ScalaLocated with PostInitCallback with Stackable with OwnableRef with SpinalTagReady with OverridedEqualsHashCode with ValCallbackRec {
-  if(globalData.toplevel == null) globalData.toplevel = this
-  if(globalData.phaseContext.topLevel == null) globalData.phaseContext.topLevel = this
+  if(parentScope == null) {
+    if(globalData.config.singleTopLevel) {
+      if (globalData.toplevel != null) SpinalError(s"MULTIPLE TOPLEVEL : SpinalHDL only allows a single toplevel Component.\n- ${globalData.toplevel.getClass}\n- ${this.getClass}")
+      assert(globalData.phaseContext.topLevel == null, "???")
+    }
+    globalData.toplevel = this
+    globalData.phaseContext.topLevel = this
+  }
   val dslBody = new ScopeStatement(null)
 
   dslBody.component = this
@@ -125,9 +132,9 @@ abstract class Component extends NameableByComponent with ContextUser with Scala
   private[core] val level : Int = if(parent == null) 0 else parent.level + 1
   /** Contains an array of all children Component */
   val children = ArrayBuffer[Component]()
-  def walkComponents(body : Component => Unit) = {
+  def walkComponents(body : Component => Unit) : Unit = {
     body(this)
-    children.foreach(body)
+    children.foreach(_.walkComponents(body))
   }
 
   var traceEnabled = true

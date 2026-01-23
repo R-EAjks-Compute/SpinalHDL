@@ -22,7 +22,7 @@ package spinal.core
 
 import spinal.core.DslScopeStack.storeAsMutable
 import spinal.core.Nameable._
-import spinal.core.fiber.{Elab, Handle}
+import spinal.core.fiber.{Fiber, Handle}
 
 import scala.collection.mutable
 import scala.collection.mutable.{ArrayBuffer, Stack}
@@ -88,6 +88,12 @@ object SwitchStack extends ScopeProperty[SwitchContext]{
   override def default = null
 }
 
+object OnCreateStack extends ScopeProperty[Nameable => Unit]{
+  storeAsMutable = false
+  override def default = null
+}
+
+
 
 /**
   * Global data
@@ -118,7 +124,9 @@ class GlobalData(val config : SpinalConfig) {
   var scalaLocatedEnable = false
   val scalaLocatedComponents = mutable.HashSet[Class[_]]()
   val scalaLocateds = mutable.HashSet[ScalaLocated]()
-  val elab = new Elab()
+  val elab = new Fiber()
+  elab.setName("spinal_elab")
+//  elab.inflightLock.globalData = this
 
   def applyScalaLocated(): Unit ={
     try {
@@ -191,7 +199,7 @@ class GlobalData(val config : SpinalConfig) {
 
 /** Get a link to the globalData */
 trait GlobalDataUser {
-  val globalData = GlobalData.get
+  var globalData = GlobalData.get
 }
 
 
@@ -271,7 +279,7 @@ trait Assignable {
     }
   }
 
-  private[core] def assignFromImpl(that: AnyRef, target: AnyRef, kind: AnyRef)(implicit loc: Location): Unit
+  protected def assignFromImpl(that: AnyRef, target: AnyRef, kind: AnyRef)(implicit loc: Location): Unit
 
   def getRealSourceNoRec: Any
 
@@ -591,7 +599,7 @@ object ScalaLocated {
 
   def filterStackTrace(that: Array[StackTraceElement]) = that.filter(trace => {
     val className = trace.getClassName
-    !(className.startsWith("scala.") || className.startsWith("spinal.core") || !filter(trace.toString)) || ScalaLocated.unfiltredFiles.contains(trace.getFileName)
+    !(className.startsWith("scala.") || className.startsWith("spinal.core")  || className.startsWith("spinal.sim") || !filter(trace.toString)) || ScalaLocated.unfiltredFiles.contains(trace.getFileName)
   })
 
   def short(scalaTrace: Throwable): String = {
@@ -648,6 +656,12 @@ trait SpinalTagReady {
 
   def addTags[T <: SpinalTag](tags: Iterable[T]): this.type = {
     for (tag <- tags) addTag(tag)
+    this
+  }
+
+  def addTags(h : SpinalTag, tail : SpinalTag*): this.type = {
+    addTag(h)
+    for (tag <- tail) addTag(tag)
     this
   }
 
@@ -764,11 +778,21 @@ trait SpinalTag {
   def driverShouldNotChange = false
   def canSymplifyHost       = false
   def allowMultipleInstance = true // Allow multiple instances of the tag on the same object
+  def ioTag                 = false // Propagate tag to IO
 
   def apply[T <: SpinalTagReady](that : T) : T = {
     that.addTag(this)
     that
   }
+  def apply(that : SpinalTagReady, others : SpinalTagReady*) : Unit = {
+    apply(that)
+    others.foreach(apply)
+  }
+}
+
+
+trait SpinalTagGetter[T] extends SpinalTag{
+  def get() : T
 }
 
 class DefaultTag(val that: BaseType) extends SpinalTag
@@ -789,6 +813,8 @@ object allowOutOfRangeLiterals               extends SpinalTag{
     this
   }
 }
+
+object noInit                        extends SpinalTag
 object unusedTag                     extends SpinalTag
 object noCombinatorialLoopCheck      extends SpinalTag
 object noLatchCheck                  extends SpinalTag
@@ -810,6 +836,10 @@ class ExternalDriverTag(val driver : Data)             extends SpinalTag{
   override def allowMultipleInstance = false
 }
 
+
+class CrossClockBufferDepth(val value : Int) extends SpinalTag{
+  override val allowMultipleInstance = false
+}
 
 object Driver {
   val startTime = System.currentTimeMillis()
@@ -918,13 +948,13 @@ trait Num[T <: Data] {
   */
 trait BitwiseOp[T <: Data]{
 
-  /** Logical AND operator */
+  /** Bitwise AND operator */
   def &(right: T): T
 
-  /** Logical OR operator */
+  /** Bitwise OR operator */
   def |(right: T): T
 
-  /** Logical XOR operator */
+  /** Bitwise XOR operator */
   def ^(right: T): T
 
   /** Inverse bitwise operator */

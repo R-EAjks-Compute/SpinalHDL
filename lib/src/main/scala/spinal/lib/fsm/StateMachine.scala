@@ -202,9 +202,9 @@ class StateMachine extends Area with StateMachineAccessor with ScalaLocated {
 
     for(state <- states){
       checkState(state)
-      val enumElement = enumDef.newElement(if(state.isNamed && this.isNamed) {
+      val enumElement = enumDef.newElement().setLambdaName(state.isNamed && this.isNamed)(
         Nameable.getNameWithoutPrefix(prefix = this, from = state)
-      } else null)
+      )
       stateToEnumElement += (state -> enumElement)
     }
 
@@ -360,6 +360,10 @@ class StateMachine extends Area with StateMachineAccessor with ScalaLocated {
 
   override def startFsm(): Unit = {
     wantStart := True
+  }
+
+  def exit(): Unit = {
+    exitFsm()
   }
 
   override def exitFsm(): Unit = {

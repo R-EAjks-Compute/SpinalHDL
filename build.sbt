@@ -9,6 +9,7 @@ val defaultSettings = Defaults.coreDefaultSettings ++ xerial.sbt.Sonatype.sonaty
   crossScalaVersions := SpinalVersion.compilers,
   scalaVersion := SpinalVersion.compilers(0),
   scalacOptions ++= Seq("-unchecked","-target:jvm-1.8"/*, "-feature" ,"-deprecation"*/),
+  scalacOptions += "-language:reflectiveCalls",
   javacOptions ++= Seq("-source", "1.8", "-target", "1.8"),
   fork := true,
 
@@ -27,6 +28,7 @@ val defaultSettings = Defaults.coreDefaultSettings ++ xerial.sbt.Sonatype.sonaty
 
   libraryDependencies += "org.scala-lang" % "scala-library" % scalaVersion.value,
   libraryDependencies += "org.scalatest" %% "scalatest" % scalatestVersion % "test",
+  libraryDependencies += "org.scalactic" %% "scalactic" % "3.2.10", //Ensure that scalatic version 3.2.5 is avoided
 
   dependencyOverrides += "net.java.dev.jna" % "jna" % "5.12.1",
   dependencyOverrides += "net.java.dev.jna" % "jna-platform" % "5.12.1",
@@ -158,7 +160,7 @@ lazy val lib = (project in file("lib"))
     defaultSettingsWithPlugin,
     name := "SpinalHDL-lib",
     libraryDependencies += "commons-io" % "commons-io" % "2.11.0",
-    version := SpinalVersion.lib
+    version := SpinalVersion.lib,
   )
   .dependsOn (sim, core)
 
@@ -171,8 +173,6 @@ lazy val tester = (project in file("tester"))
     version := SpinalVersion.tester,
     Test / baseDirectory := file("./"),
     libraryDependencies += "org.scalatest" %% "scalatest" % scalatestVersion,
-    publishArtifact := true,
-    publishLocal := {}
   )
   .dependsOn(sim, core, lib)
 

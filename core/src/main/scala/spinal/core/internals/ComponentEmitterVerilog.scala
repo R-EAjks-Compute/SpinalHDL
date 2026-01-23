@@ -85,10 +85,10 @@ class ComponentEmitterVerilog(
       val EDAcomment = s"${emitCommentAttributes(baseType.instanceAttributes)}"  //like "/* verilator public */"
 
       if(outputsToBufferize.contains(baseType) || baseType.isInput){
-        portMaps += f"${syntax}${dir}%6s ${""}%3s ${section}%-8s ${name}${EDAcomment}${comma}"
+        portMaps += f"${syntax}${dir}%6s wire ${section}%-8s ${name}${EDAcomment}${comma}"
       } else {
-        val isReg   = if(signalNeedProcess(baseType)) "reg" else ""
-        portMaps += f"${syntax}${dir}%6s ${isReg}%3s ${section}%-8s ${name}${EDAcomment}${comma}"
+        val isReg   = if(signalNeedProcess(baseType)) "reg" else "wire"
+        portMaps += f"${syntax}${dir}%6s ${isReg}%-4s ${section}%-8s ${name}${EDAcomment}${comma}"
       }
     }
   }
@@ -124,7 +124,10 @@ class ComponentEmitterVerilog(
           case e           => expressionToWrap += e
         }
 
-        val portName = anonymSignalPrefix + "_" + mem.getName() + "_port" + portId
+        val portName = mem.getName() + "_spinal_port" + portId
+        s match {
+          case s : Nameable => s.unsetName().setName(portName)
+        }
         s match {
           case s: MemReadSync  =>
             val name = component.localNamingScope.allocateName(portName)
@@ -171,15 +174,15 @@ class ComponentEmitterVerilog(
     cutLongExpressions()
     expressionToWrap --= wrappedExpressionToName.keysIterator
 
-    component.dslBody.walkStatements{ s =>
-      s.walkDrivingExpressions{ e =>
-        if(!e.isInstanceOf[DeclarationStatement] && expressionToWrap.contains(e)){
-          var sName = s match {
-            case s : AssignmentStatement => "_" + s.dlcParent.getName()
-            case s : WhenStatement => "_when"
-            case s : SwitchContext => "_switch"
-            case s : Nameable => "_" + s.getName()
-            case s : MemPortStatement => "_" + s.dlcParent.getName() + "_port"
+    component.dslBody.walkStatements { s =>
+      s.walkDrivingExpressions { e =>
+        if (!e.isInstanceOf[DeclarationStatement] && expressionToWrap.contains(e)) {
+          val sName = s match {
+            case s: AssignmentStatement => "_" + s.dlcParent.getName()
+            case _: WhenStatement => "_when"
+            case _: SwitchContext => "_switch"
+            case s: MemPortStatement => "_" + s.dlcParent.getName() + "_port"
+            case s: Nameable => "_" + s.getName()
             case _ => ""
           }
           val name = component.localNamingScope.allocateName(anonymSignalPrefix + sName)
@@ -196,13 +199,13 @@ class ComponentEmitterVerilog(
     }
 
     //Wrap inout
-    analogs.foreach(io => {
-      io.foreachStatements{
-        case AssignmentStatement(target, source: BaseType) =>
-          referencesOverrides(source) = emitAssignedExpression(target)
-        case _ =>
-      }
-    })
+//    analogs.foreach(io => {
+//      io.foreachStatements{
+//        case AssignmentStatement(target, source: BaseType) =>
+//          referencesOverrides(source) = emitAssignedExpression(target)
+//        case _ =>
+//      }
+//    })
 
     //Collect all localEnums
     component.dslBody.walkStatements { s =>
@@ -329,6 +332,14 @@ class ComponentEmitterVerilog(
       }
     }
 
+    val analogDrivers = mutable.LinkedHashMap[BaseType, ArrayBuffer[AssignmentStatement]]()
+    for(analog <- analogs) analog.foreachStatements{s =>
+      s.walkDrivingExpressions{
+        case e : BaseType => analogDrivers.getOrElseUpdate(e, ArrayBuffer[AssignmentStatement]()) += s
+        case _ =>
+      }
+    }
+
     for (child <- component.children) {
       val isBB             = child.isInstanceOf[BlackBox] && child.asInstanceOf[BlackBox].isBlackBox
       val isBBUsingULogic  = isBB && child.asInstanceOf[BlackBox].isUsingULogic
@@ -375,19 +386,47 @@ class ComponentEmitterVerilog(
       logics ++= s"${child.getName()} (\n"
 
       val ios = child.getOrdredNodeIo.filterNot(_.isSuffix)
-      val instports: String = ios.map{ data =>
-        val portAlign  = s"%-${maxNameLength}s".format(emitReferenceNoOverrides(data))
-        val wireAlign  = s"%-${maxNameLengthCon}s".format(netsWithSection(data))
-        val comma      = if (data == ios.last) " " else ","
-        val dirtag: String = data.dir match{
-          case spinal.core.in  | spinal.core.inWithNull  => "i"
-          case spinal.core.out | spinal.core.outWithNull => "o"
-          case spinal.core.inout                         => "~"
-          case _  => SpinalError("Not founded IO type")
+      val prepareInstports = ios.flatMap { data =>
+        if (data.isInOut) {
+          analogDrivers.get(data) match {
+            case Some(statements) => {
+              case class Mapping(offset: Int, width: Int, dst: Expression)
+              val mapping = statements.map { s =>
+                s.source match {
+                  case bt: BaseType => Mapping(0, widthOf(bt), s.target)
+                  case e: BitVectorBitAccessFixed => Mapping(e.bitId, 1, s.target)
+                  case e: BitVectorRangedAccessFixed => Mapping(e.lo, e.getWidth, s.target)
+                }
+              }
+              assert(mapping.map(_.width).sum == widthOf(data))
+              val ordered = mapping.sortBy(_.offset)
+              val portAlign = s"%-${maxNameLength}s".format(emitExpression(data))
+              val single_ordered = ordered.size == 1
+              val wireAlign = ordered.reverse.map(e => emitAssignedExpression(e.dst)).mkString(", ")
+              val comma = if (data == ios.last) " " else ","
+              if (single_ordered) Some((s"    .${portAlign} (", s"${wireAlign}", s")${comma} //~\n"))
+              else Some((s"    .${portAlign} (", s"{${wireAlign}}", s")${comma} //~\n"))
+            }
+            case None => None
+          }
+        } else {
+          val portAlign = s"%-${maxNameLength}s".format(emitReferenceNoOverrides(data))
+          val wireAlign = s"${netsWithSection(data)}"
+          val comma = if (data == ios.last) " " else ","
+          val dirtag: String = data.dir match {
+            case spinal.core.in | spinal.core.inWithNull => "i"
+            case spinal.core.out | spinal.core.outWithNull => "o"
+            case spinal.core.inout => "~"
+            case _ => SpinalError("Not founded IO type")
+          }
+          Some((s"    .${portAlign} (", s"${wireAlign}", s")${comma} //${dirtag}\n"))
         }
-        s"    .${portAlign} (${wireAlign})${comma} //${dirtag}\n"
-      }.mkString
-
+      }
+      val maxNameLengthConNew = if(prepareInstports.isEmpty) 0 else prepareInstports.map(_._2.length()).max
+      val prepareInstportsLen = prepareInstports
+        .map(x => (x._1, s"%-${maxNameLengthConNew}s".format(x._2), x._3))
+        .map(x => s"${x._1}${x._2}${x._3}")
+      val instports: String = prepareInstportsLen.mkString
 
       logics ++= instports
       logics ++= s"  );"
@@ -562,8 +601,11 @@ class ComponentEmitterVerilog(
 
   def emitEnumParams(): Unit = {
     for((e,encoding) <- localEnums) {
-      for(element <- e.elements) {
-        localparams ++= s"  localparam ${emitEnumLiteral(element, encoding,"")} = ${idToBits(element, encoding)};\n"
+      for (element <- e.elements) {
+        localparams ++= s"  localparam ${emitEnumLiteral(element, encoding, "")} = ${idToBits(element, encoding)};\n"
+      }
+      if(encoding == binaryOneHot) for (element <- e.elements) {
+        localparams ++= s"  localparam ${emitEnumLiteral(element, encoding, "")}_OH_ID = ${element.position};\n"
       }
     }
   }
@@ -695,7 +737,8 @@ class ComponentEmitterVerilog(
               b ++= s"${tab}    $keyword($cond); // ${assertStatement.loc.file}.scala:L${assertStatement.loc.line}\n"
               b ++= s"${tab}  `else\n"
               /* Emulate them using $display */
-              b ++= s"${tab}    if(!$cond) begin\n"
+              val zeroTimeCond = if (spinalConfig.noAssertAtTimeZero) " && $realtime != 0" else ""
+              b ++= s"${tab}    if(!${cond}${zeroTimeCond}) begin\n"
               b ++= s"""${tab}      $$display("$severity $frontString"$backString); // ${assertStatement.loc.file}.scala:L${assertStatement.loc.line}\n"""
               if (assertStatement.severity == `FAILURE`) b ++= tab + "      $finish;\n"
               b ++= s"${tab}    end\n"
@@ -709,7 +752,8 @@ class ComponentEmitterVerilog(
                 case `FAILURE` => "$fatal"
               }
               if (assertStatement.kind == AssertStatementKind.ASSERT && !spinalConfig.formalAsserts) {
-                b ++= s"${tab}$keyword($cond) else begin\n"
+                val zeroTimeCond = if (spinalConfig.noAssertAtTimeZero) " || $realtime == 0" else ""
+                b ++= s"${tab}$keyword(${cond}${zeroTimeCond}) else begin\n"
                 b ++= s"""${tab}  $severity("$frontString"$backString); // ${assertStatement.loc.file}.scala:L${assertStatement.loc.line}\n"""
                 if (assertStatement.severity == `FAILURE`) b ++= tab + "  $finish;\n"
                 b ++= s"${tab}end\n"
@@ -789,8 +833,13 @@ class ComponentEmitterVerilog(
                   def emitIsCond(that: Expression): String = {
                     that match {
                       case lit: EnumLiteral[_] if (lit.encoding == binaryOneHot) => {
-                        val expr = emitEnumLiteral(lit.senum, lit.encoding)
-                        s"(((${emitExpression(switchStatement.value)}) & ${expr}) == ${expr})"
+                        switchValue match {
+                          case _ : SpinalEnumCraft[_] => s"(${emitExpression(switchStatement.value)}[${emitEnumLiteral(lit.senum, lit.encoding)}_OH_ID])"
+                          case _ => {
+                            val expr = emitEnumLiteral(lit.senum, lit.encoding)
+                            s"(((${emitExpression(switchStatement.value)}) & ${expr}) == ${expr})"
+                          }
+                        }
                       }
                     }
                   }
@@ -1014,10 +1063,10 @@ class ComponentEmitterVerilog(
             " = $urandom"
           case bv: BitVector =>
             val randCount = (bv.getBitsWidth+31)/32
-            s" = {${randCount}{$$urandom}}"
+            s" = {${(Array.fill(randCount)("$urandom")).mkString(",")}}"
           case e: SpinalEnumCraft[_] =>
             val randCount = (e.getBitsWidth+31)/32
-            s" = {${randCount}{$$urandom}}"
+            s" = {${(Array.fill(randCount)("$urandom")).mkString(",")}}"
         }
       }
     }
@@ -1080,38 +1129,6 @@ class ComponentEmitterVerilog(
     //ret ++= emitSignal(mem, mem);
     val symbolWidth = mem.getMemSymbolWidth()
     val symbolCount = mem.getMemSymbolCount()
-
-    val initAssignmentBuilder = for(i <- 0 until symbolCount) yield {
-      val builder = new StringBuilder()
-      val mask    = (BigInt(1) << symbolWidth) - 1
-
-      if (mem.initialContent != null) {
-        builder ++= " := ("
-
-        var first = true
-        for ((value, index) <- mem.initialContent.zipWithIndex) {
-          if (!first)
-            builder ++= ","
-          else
-            first = false
-
-          if ((index & 15) == 0) {
-            builder ++= "\n     "
-          }
-
-          val unfilledValue = ((value>>(i*symbolWidth)) & mask).toString(2)
-          val filledValue   = "0" * (symbolWidth-unfilledValue.length) + unfilledValue
-          builder ++= "\"" + filledValue + "\""
-        }
-
-        builder ++= ")"
-
-      }else if(mem.hasTag(randomBoot)){
-        val value = if(pc.config.randBootFixValue) {"'1'"} else { if(Random.nextBoolean()) "'1'" else "'0'"}
-        builder ++= s" := (others => (others => $value))"
-      }
-      builder
-    }
 
     if(memBitsMaskKind == MULTIPLE_RAM && symbolCount != 1) {
       val mappings = ArrayBuffer[MemSymbolesMapping]()
@@ -1393,8 +1410,8 @@ end
 
     def onEachExpression(e: Expression): Unit = {
       e match {
-        case node: SubAccess => applyTo(node.getBitVector)
-        case node: Resize    => applyTo(node.input)
+        case node: Resize    if !node.input.isInstanceOf[BaseType] => applyTo(node.input)
+        case node: SubAccess if !node.getBitVector.isInstanceOf[BaseType] => applyTo(node.getBitVector)
         case _               =>
       }
     }
@@ -1402,8 +1419,8 @@ end
     def onEachExpressionNotDrivingBaseType(e: Expression): Unit = {
       onEachExpression(e)
       e match {
-    //    case node: Literal => applyTo(node)
         case node: Resize                           => applyTo(node)
+        case node: Literal                          => // Avoid triggering on SInt literals
         case node if node.getTypeObject == TypeSInt => applyTo(node)
         case node: Operator.UInt.Add                => applyTo(node)
         case node: Operator.UInt.Sub                => applyTo(node)
@@ -1479,11 +1496,11 @@ end
   }
 
   def shiftRightByIntImpl(e: Operator.BitVector.ShiftRightByInt): String = {
-    s"(${emitExpression(e.source)} >>> ${e.shift})"
+    s"(${emitExpression(e.source)} >>> ${log2Up(e.shift+1)}'d${e.shift})"
   }
 
   def shiftLeftByIntImpl(e: Operator.BitVector.ShiftLeftByInt): String = {
-    s"({${e.shift}'d0,${emitExpression(e.source)}} <<< ${e.shift})"
+    s"({${e.shift}'d0,${emitExpression(e.source)}} <<< ${log2Up(e.shift+1)}'d${e.shift})"
   }
 
 
@@ -1506,7 +1523,7 @@ end
     if(e.getWidth > 4 && !e.hasPoison()){
       s"${e.getWidth}'h${e.hexString(e.getWidth,false)}"
     } else {
-      s"${e.getWidth}'b${e.getBitsStringOn(e.getWidth,'x')}"
+      s"${e.getWidth}'b${e.getBitsStringOn(e.getWidth,if(spinalConfig.dontCareGenAsZero) '0' else 'x')}"
     }
   }
 
@@ -1526,8 +1543,8 @@ end
     encoding match {
       case `binaryOneHot` => {
         (e.left, e.right) match {
-//          case (sig, lit : EnumLiteral[_]) => s"(${if (eguals) "" else "! "}${emitExpression(sig)}[${lit.senum.position}])"
-//          case (lit : EnumLiteral[_], sig) => s"(${if (eguals) "" else "! "}${emitExpression(sig)}[${lit.senum.position}])"
+          case (sig : SpinalEnumCraft[_], lit : EnumLiteral[_]) => s"(${if (eguals) "" else "! "}${emitExpression(sig)}[${emitEnumLiteral(lit.senum, lit.encoding)}_OH_ID])"
+          case (lit : EnumLiteral[_], sig : SpinalEnumCraft[_]) => s"(${if (eguals) "" else "! "}${emitExpression(sig)}[${emitEnumLiteral(lit.senum, lit.encoding)}_OH_ID])"
           case _ => s"((${emitExpression(e.left)} & ${emitExpression(e.right)}) ${if (eguals) "!=" else "=="} ${encoding.getWidth(enumDef)}'b${"0" * encoding.getWidth(enumDef)})"
         }
       }
@@ -1546,7 +1563,7 @@ end
 
   def emitEnumPoison(e: EnumPoison): String = {
     val width = e.encoding.getWidth(e.senum)
-    s"(${width}'b${"x" * width})"
+    s"(${width}'b${(if(spinalConfig.dontCareGenAsZero) "0" else "x") * width})"
   }
 
   def accessBoolFixed(e: BitVectorBitAccessFixed): String = {
@@ -1572,7 +1589,7 @@ end
     case  e: BitVectorLiteral                         => emitBitVectorLiteral(e)
     case  e: EnumLiteral[_]                           => emitEnumLiteralWrap(e)
 
-    case  e: BoolPoison                               => "1'bx"
+    case  e: BoolPoison                               => if(spinalConfig.dontCareGenAsZero) "1'b0" else "1'bx"
     case  e: EnumPoison                               => emitEnumPoison(e)
 
     //unsigned

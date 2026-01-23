@@ -55,6 +55,8 @@ object ScopeProperty {
     def restoreCloned(): Unit ={
       it.set(context.clone())
     }
+
+    def get[T](sp: ScopeProperty[T]) : T = context.get(sp.asInstanceOf[ScopeProperty[Any]]).asInstanceOf[T]
   }
 
   def capture(): Capture ={
@@ -119,8 +121,8 @@ class ScopeProperty[T]  {
     case Some(x) => false
     case _ => true
   }
-//  def nonEmpty = stack.nonEmpty
-
+  def nonEmpty = !isEmpty
+  def getOrElse(that : => T) = if(nonEmpty) get else that
   def default : T = {
     this match {
       case n : Nameable => println("On $n")

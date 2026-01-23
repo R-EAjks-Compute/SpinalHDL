@@ -62,12 +62,10 @@ case class SpinalFormalConfig(
     var _backend: SpinalFormalBackendSel = SpinalFormalBackendSel.SYMBIYOSYS,
     var _keepDebugInfo: Boolean = false,
     var _skipWireReduce: Boolean = false,
-    var _hasAsync: Boolean = false
+    var _hasAsync: Boolean = false,
+    var _timeout: Option[Int] = None,
+    var _engines: ArrayBuffer[FormalEngin] = ArrayBuffer()
 ) {
-  var _multiClock = false
-  var _timeout: Option[Int] = None;
-  var _engines: ArrayBuffer[FormalEngin] = ArrayBuffer[FormalEngin]()
-
   def withSymbiYosys: this.type = {
     _backend = SpinalFormalBackendSel.SYMBIYOSYS
     this
@@ -200,7 +198,8 @@ case class SpinalFormalConfig(
 
     val rtlFiles = new ArrayBuffer[String]()
 //    val rtlPath = rtlDir.getAbsolutePath
-    report.generatedSourcesPaths.foreach { srcPath =>
+    val rtlSources = (report.generatedSourcesPaths ++ report.blackboxesSourcesPaths)
+    rtlSources.foreach { srcPath =>
       val src = new File(srcPath)
       val lines = Source.fromFile(src).getLines.toArray
       val w = new PrintWriter(src)

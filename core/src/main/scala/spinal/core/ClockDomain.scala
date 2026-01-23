@@ -23,6 +23,8 @@ package spinal.core
 import spinal.core.ClockDomain.DivisionRate
 import spinal.core.fiber.Handle
 
+import scala.collection.mutable
+import scala.collection.immutable
 import scala.collection.mutable.ArrayBuffer
 
 sealed trait EdgeKind
@@ -34,13 +36,27 @@ object ASYNC extends ResetKind
 object SYNC  extends ResetKind
 object BOOT  extends ResetKind
 
-sealed trait Polarity
-object HIGH extends Polarity
-object LOW  extends Polarity
+sealed trait Polarity{
+  def assertedBool : Bool
+  def deassertedBool : Bool
+}
+object HIGH extends Polarity{
+  override def assertedBool: Bool = True
+  override def deassertedBool: Bool = False
+}
+object LOW  extends Polarity{
+  override def assertedBool: Bool = False
+  override def deassertedBool: Bool = True
+}
 
 case class ClockDomainTag(clockDomain: ClockDomain) extends SpinalTag{
   override def toString = s"ClockDomainTag($clockDomain)"
   override def allowMultipleInstance = false
+}
+
+case class ClockDomainReportTag(clockDomain: ClockDomain) extends SpinalTag{
+  override def toString = s"ClockDomainReportTag($clockDomain)"
+  override def allowMultipleInstance = true
 }
 
 sealed trait ClockDomainBoolTag extends SpinalTag{
@@ -59,12 +75,19 @@ case class ClockDomainConfig(clockEdge: EdgeKind = RISING, resetKind: ResetKind 
     case `ASYNC` | `SYNC` => true
     case _                => false
   }
+
+  def resetAssertValue = resetActiveLevel match {
+    case HIGH => True
+    case LOW => False
+  }
 }
 
 
 object ClockDomain {
 
-
+  val crossClockBufferPushToPopResetGen = new ScopeProperty[Boolean]{
+    override def default: Boolean = true
+  }
 
   /**
     *  Create a local clock domain with `name` as prefix. clock, reset, clockEnable signals should be assigned by your care.
@@ -228,6 +251,40 @@ object ClockDomain {
     def getMin:   HertzNumber = value
   }
 
+  def getSyncronous(that: Bool)(solved: mutable.HashMap[Bool, immutable.Set[Bool]] = mutable.HashMap[Bool, immutable.Set[Bool]]()): immutable.Set[Bool] = {
+    solved.get(that) match {
+      case Some(sync) => sync
+      case None => {
+        var sync = scala.collection.immutable.Set[Bool]()
+
+        //Collect all the directly syncronous Bool
+        sync += that
+        that.foreachTag {
+          case tag: ClockSyncTag => sync += tag.a; sync += tag.b
+          case tag: ClockDrivedTag => sync ++= getSyncronous(tag.driver)(solved)
+          case _ =>
+        }
+
+        //Lock for driver inferation
+        if (that.hasOnlyOneStatement && that.head.parentScope == that.rootScopeStatement && that.head.source.isInstanceOf[Bool] && that.head.source.asInstanceOf[Bool].isComb) {
+          sync ++= getSyncronous(that.head.source.asInstanceOf[Bool])(solved)
+        }
+
+        //Cache result
+        solved(that) = sync
+
+        sync
+      }
+    }
+  }
+
+  def areSynchronousBool(a: Bool, b: Bool)(solved: mutable.HashMap[Bool, immutable.Set[Bool]]): Boolean = getSyncronous(a)(solved).contains(b) || getSyncronous(b)(solved).contains(a) || getSyncronous(a)(solved).intersect(getSyncronous(b)(solved)).nonEmpty
+
+  def areSynchronous(a: ClockDomain, b: ClockDomain,solved: mutable.HashMap[Bool, immutable.Set[Bool]] = mutable.HashMap[Bool, immutable.Set[Bool]]()): Boolean = {
+    a == b || a.clock == b.clock || areSynchronousBool(a.clock, b.clock)(solved)
+  }
+
+  def areSynchronous(a: ClockDomain, b: ClockDomain) : Boolean = areSynchronous(a,b,mutable.HashMap[Bool, immutable.Set[Bool]]())
 
 }
 
@@ -321,7 +378,7 @@ case class ClockDomain(clock       : Bool,
 //                               reset : String = if(config.resetActiveLevel == HIGH) "reset" else "resetn",
 //                               softReset : String = if(config.softResetActiveLevel == HIGH) "soft_reset" else "soft_resetn",
 //                               enable : String  = if(config.clockEnableActiveLevel == HIGH) "clk_en" else "clk_en"): this.type ={
-def renamePulledWires(clock     : String = null,
+  def renamePulledWires(clock     : String = null,
                       reset     : String = null,
                       softReset : String = null,
                       enable    : String = null): this.type ={
@@ -439,6 +496,8 @@ def renamePulledWires(clock     : String = null,
       case _ : Throwable => return UnknownFrequency()
     }
   }
+
+  class Area extends ClockingArea(this)
 }
 
 

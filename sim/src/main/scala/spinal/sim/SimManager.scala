@@ -90,10 +90,11 @@ object SimManager{
   }
 }
 
-class SimManager(val raw : SimRaw) {
+class SimManager(val raw : SimRaw, val random: Random = Random, val testName : String = "unnamed") {
   val cpuAffinity = SimManager.newCpuAffinity()
   val mainThread = Thread.currentThread()
   var threads : SimCallSchedule = null
+  var printEvalTime = false
 
   val sensitivities = mutable.ArrayBuffer[SimManagerSensitive]()
   var commandBuffer = mutable.ArrayBuffer[() => Unit]()
@@ -258,11 +259,13 @@ class SimManager(val raw : SimRaw) {
       var evalNanoTimeRef = System.nanoTime()
       deltaCycle = 0
 
-      //TODO
-
       if(raw.eval()){
         throw new SimFailure("RTL assertion failure")
       }
+
+      var nanoCounter = 0l
+      var evalCalls = 0l
+      var nanoStart = System.nanoTime()
       while (((continueWhile || retains != 0) && threads != null/* && simContinue*/) || forceDeltaCycle) {
         //Sleep until the next activity
         val nextTime = if(forceDeltaCycle) time else threads.time
@@ -287,8 +290,20 @@ class SimManager(val raw : SimRaw) {
 
         //Evaluate the hardware outputs
         if(forceDeltaCycle){
-          if(raw.eval()){
-            throw new SimFailure("Verilog assertion failure")
+          printEvalTime match {
+            case false => {
+              if (raw.eval()) throw new SimFailure("HDL assertion failure")
+            }
+            case true => {
+              val t1 = System.nanoTime()
+              if (raw.eval()) throw new SimFailure("HDL assertion failure")
+              val t2 = System.nanoTime()
+              evalCalls += 1
+              nanoCounter += t2 - t1
+              if (evalCalls % 100000 == 0) {
+                println(f"evalAVG=${nanoCounter / evalCalls} ns, eff=${nanoCounter * 100 / (t2 - nanoStart)}%%")
+              }
+            }
           }
         }
 
@@ -329,7 +344,7 @@ class SimManager(val raw : SimRaw) {
         raw.sleep(1)
         val str = e.getStackTrace.head.toString
         if(str.contains("spinal.core.") && !str.contains("sim")){
-          System.err.println("It seems like you used some SpinalHDL hardware elaboration API in the simulation. If you did, you shouldn't.")
+          System.err.println(s"It seems like you used some SpinalHDL hardware elaboration API in the simulation. If you did, you shouldn't. From : \n${e.getStackTrace.mkString("\n")}")
         }
         throw e
       }
@@ -340,8 +355,8 @@ class SimManager(val raw : SimRaw) {
       for(t <- (jvmIdleThreads ++ jvmBusyThreads)){
         while(t.isAlive()){Thread.sleep(0)}
       }
-      raw.end()
       onEndListeners.foreach(_())
+      raw.end()
       SimManagerContext.threadLocal.set(null)
     }
   }

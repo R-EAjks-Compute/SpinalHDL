@@ -99,7 +99,7 @@ case class Crc(kind : CrcKind, dataWidth : Int) extends Component{
 
   val state = Reg(Bits(kind.polynomialWidth bits)) init(kind.initValue)
 
-  var acc = state
+  var acc = CombInit(state)
   for(i <- if(kind.inputReflected) 0 to dataWidth-1 else dataWidth-1 downto 0){
     acc \= ((acc |<< 1) ^ ((io.input.payload(i) ^ acc.msb) ? B(kind.polynomial, kind.polynomialWidth bits) | B(0, kind.polynomialWidth bits)))
   }
@@ -214,7 +214,7 @@ case class MacRxBuffer(pushCd : ClockDomain,
   val push = pushCd on new Area{
     val currentPtr, oldPtr = Reg(UInt(ptrWidth bits)) init(0)
     val currentPtrPlusOne = currentPtr + 1
-    val popPtr  = popToPush.io.output.toFlow.toReg(0)
+    val popPtr  = popToPush.io.output.toFlow.toReg(0).addTag(crossClockDomain)
     pushToPop.io.input.payload := oldPtr
 
     val ratio = popWidth/pushWidth
@@ -289,14 +289,14 @@ case class MacRxBuffer(pushCd : ClockDomain,
 
   val pop = popCd on new Area{
     val currentPtr = Reg(UInt(ptrWidth bits)) init(0)
-    val pushPtr = pushToPop.io.output.toFlow.toReg(0)
+    val pushPtr = pushToPop.io.output.toFlow.toReg(0).addTag(crossClockDomain)
     popToPush.io.input.payload := currentPtr
 
     val cmd = Stream(ram.addressType())
     cmd.valid := !isEmpty(currentPtr, pushPtr)
     cmd.payload := currentPtr.resized
 
-    io.pop.stream << ram.streamReadSync(cmd)
+    io.pop.stream << ram.streamReadSync(cmd, crossClock = true)
 
     when(cmd.fire){
       currentPtr := currentPtr + 1

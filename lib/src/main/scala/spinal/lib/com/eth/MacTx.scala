@@ -43,7 +43,7 @@ case class MacTxManagedStreamFifoCc[T <: Data](payloadType : HardType[T],
 
   val push = pushCd on new Area {
     val currentPtr, oldPtr = Reg(UInt(ptrWidth bits)) init(0)
-    val popPtr = popToPush.io.output.toFlow.toReg(0)
+    val popPtr = popToPush.io.output.toFlow.toReg(0).addTag(crossClockDomain)
     pushToPop.io.input.payload := oldPtr
 
     io.push.stream.ready := !isFull(currentPtr, popPtr)
@@ -61,7 +61,7 @@ case class MacTxManagedStreamFifoCc[T <: Data](payloadType : HardType[T],
 
   val pop = popCd on new Area {
     val currentPtr, oldPtr = Reg(UInt(ptrWidth bits)) init(0)
-    val pushPtr = pushToPop.io.output.toFlow.toReg(0)
+    val pushPtr = pushToPop.io.output.toFlow.toReg(0).addTag(crossClockDomain)
     popToPush.io.input.payload := oldPtr
 
     val cmd = Stream(ram.addressType())
@@ -70,7 +70,7 @@ case class MacTxManagedStreamFifoCc[T <: Data](payloadType : HardType[T],
 
     val commitPtr = RegNextWhen(currentPtr, io.pop.stream.fire)
 
-    io.pop.stream << ram.streamReadSync(cmd).throwWhen(io.pop.redo)
+    io.pop.stream << ram.streamReadSync(cmd, crossClock = true).throwWhen(io.pop.redo)
 
     when(cmd.fire){
       currentPtr := currentPtr + 1
