@@ -19,6 +19,12 @@ class ReportSourceLocationTester extends SpinalAnyFunSuite {
     rtl.linesIterator.flatMap(displayFormatString).toList
   }
 
+  private def findGeneratedFile(spinalReport: SpinalReport[_ <: Component], suffix: String): String = {
+    spinalReport.generatedSourcesPaths.find(_.endsWith(suffix)).getOrElse {
+      fail(s"No $suffix file generated, got: ${spinalReport.generatedSourcesPaths.mkString(", ")}")
+    }
+  }
+
   test("report can opt-in to print Scala source location") {
     val outDir = Files.createTempDirectory("spinalhdl_report_source_location_").toFile
 
@@ -31,9 +37,7 @@ class ReportSourceLocationTester extends SpinalAnyFunSuite {
         report("HELLO_WITH_LOC", includeSourceLocation = true)
       })
 
-    val rtlPath = spinalReport.generatedSourcesPaths.find(_.endsWith(".v")).getOrElse {
-      fail(s"No Verilog file generated, got: ${spinalReport.generatedSourcesPaths.mkString(", ")}")
-    }
+    val rtlPath = findGeneratedFile(spinalReport, ".v")
 
     val rtl = new String(Files.readAllBytes(Paths.get(rtlPath)), StandardCharsets.UTF_8)
 
@@ -55,9 +59,7 @@ class ReportSourceLocationTester extends SpinalAnyFunSuite {
         report("HELLO_GLOBAL_LOC")
       })
 
-    val rtlPath = spinalReport.generatedSourcesPaths.find(_.endsWith(".v")).getOrElse {
-      fail(s"No Verilog file generated, got: ${spinalReport.generatedSourcesPaths.mkString(", ")}")
-    }
+    val rtlPath = findGeneratedFile(spinalReport, ".v")
 
     val rtl = new String(Files.readAllBytes(Paths.get(rtlPath)), StandardCharsets.UTF_8)
     val formats = displayFormatStrings(rtl)
@@ -72,12 +74,31 @@ class ReportSourceLocationTester extends SpinalAnyFunSuite {
         report("HELLO_DEFAULT_FMT", includeSourceLocation = true)
       })
 
-    val rtlPath = spinalReport.generatedSourcesPaths.find(_.endsWith(".v")).getOrElse {
-      fail(s"No Verilog file generated, got: ${spinalReport.generatedSourcesPaths.mkString(", ")}")
-    }
+    val rtlPath = findGeneratedFile(spinalReport, ".v")
 
     val rtl = new String(Files.readAllBytes(Paths.get(rtlPath)), StandardCharsets.UTF_8)
     val formats = displayFormatStrings(rtl)
     assert(formats.exists(_.matches(""".*NOTE\(.*\.scala:\d+\) HELLO_DEFAULT_FMT.*""")))
+  }
+
+  test("report can opt-in to print Scala source location in VHDL output") {
+    val outDir = Files.createTempDirectory("spinalhdl_report_source_location_vhdl_").toFile
+
+    val spinalReport = SpinalConfig(targetDirectory = outDir.getAbsolutePath)
+      .generateVhdl(new Component {
+        report("HELLO_VHDL_NO_LOC")
+        report("HELLO_VHDL_WITH_LOC", includeSourceLocation = true)
+      })
+
+    val vhdlPath = findGeneratedFile(spinalReport, ".vhd")
+    val vhdl = new String(Files.readAllBytes(Paths.get(vhdlPath)), StandardCharsets.UTF_8)
+
+    assert(vhdl.contains("HELLO_VHDL_NO_LOC"))
+    assert(vhdl.contains("HELLO_VHDL_WITH_LOC"))
+    assert(vhdl.matches("""(?s).*NOTE\(.*\.scala:\d+\).*HELLO_VHDL_WITH_LOC.*"""))
+
+    val noLocLines = vhdl.linesIterator.filter(_.contains("HELLO_VHDL_NO_LOC")).toList
+    assert(noLocLines.nonEmpty)
+    assert(!noLocLines.exists(_.contains(".scala:")))
   }
 }
