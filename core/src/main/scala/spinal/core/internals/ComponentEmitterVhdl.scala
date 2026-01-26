@@ -747,9 +747,8 @@ class ComponentEmitterVhdl(
 
               val messageInput =
                 if (assertStatement.hasTag(reportIncludeSourceLocation)) {
-                  val formatOverride = assertStatement.getTag(classOf[reportSourceLocationFormatTag]).map(_.format)
-                  val format = formatOverride.getOrElse(spinalConfig.reportSourceLocationFormat)
-                  ReportSourceLocation.prefix(format, assertStatement.loc, assertStatement.severity) +: assertStatement.message
+                  val format = ReportFormatting.resolveFormat(assertStatement, spinalConfig)
+                  ReportFormatting.renderPrefix(format, assertStatement.loc, assertStatement.severity) +: assertStatement.message
                 } else {
                   assertStatement.message
                 }
@@ -779,12 +778,7 @@ class ComponentEmitterVhdl(
                 }
                 .mkString(" & ")
   
-              val severity = "severity " +  (assertStatement.severity match{
-                case `NOTE`     => "NOTE"
-                case `WARNING`  => "WARNING"
-                case `ERROR`    => "ERROR"
-                case `FAILURE`  => "FAILURE"
-              })
+              val severity = "severity " + ReportFormatting.severityLabel(assertStatement.severity)
               if (message.length > 0) {
                 b ++= s"""${tab}assert $cond = '1' report ($message) $severity;\n"""
               } else {

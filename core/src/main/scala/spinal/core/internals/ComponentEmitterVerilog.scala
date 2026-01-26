@@ -767,9 +767,8 @@ class ComponentEmitterVerilog(
 
             val includeLocation = assertStatement.hasTag(reportIncludeSourceLocation)
             val locationPrefix = if (includeLocation) {
-              val formatOverride = assertStatement.getTag(classOf[reportSourceLocationFormatTag]).map(_.format)
-              val format = formatOverride.getOrElse(spinalConfig.reportSourceLocationFormat)
-              ReportSourceLocation.prefix(format, assertStatement.loc, assertStatement.severity)
+              val format = ReportFormatting.resolveFormat(assertStatement, spinalConfig)
+              ReportFormatting.renderPrefix(format, assertStatement.loc, assertStatement.severity)
             } else {
               ""
             }
@@ -796,12 +795,7 @@ class ComponentEmitterVerilog(
             }
 
             if (!systemVerilog) {
-              val severity = assertStatement.severity match {
-                case `NOTE` => "NOTE"
-                case `WARNING` => "WARNING"
-                case `ERROR` => "ERROR"
-                case `FAILURE` => "FAILURE"
-              }
+              val severity = ReportFormatting.severityLabel(assertStatement.severity)
 
               b ++= s"${tab}`ifndef SYNTHESIS\n"
               b ++= s"${tab}  `ifdef FORMAL\n"
