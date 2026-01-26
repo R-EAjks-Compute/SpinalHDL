@@ -565,11 +565,27 @@ package object core extends BaseTypeFactory with BaseTypeCast {
 //    if(cond.dlcIsEmpty || !cond.head.source.isInstanceOf[Operator.Formal.InitState])
 //      cond.setName("when_" + loc.file + "_l" + loc.line, Nameable.REMOVABLE)
 
-  def report(message: String)   = assert(False, message, NOTE)
-  def report(message: Seq[Any]) = assert(False, message, NOTE)
+  private def reportDefaultIncludeSourceLocation: Boolean = {
+    val gd = GlobalData.get
+    gd != null && gd.config.reportIncludeSourceLocation
+  }
 
-  def report(message: String,   severity: AssertNodeSeverity) = assert(False, message, severity)
-  def report(message: Seq[Any], severity: AssertNodeSeverity) = assert(False, message, severity)
+  private def reportTagIfNeeded(statement: AssertStatement, includeSourceLocation: Boolean): AssertStatement = {
+    if (includeSourceLocation) statement.addTag(reportIncludeSourceLocation)
+    statement
+  }
+
+  def report(message: String)(implicit loc: Location)   = reportTagIfNeeded(assert(False, message, NOTE), reportDefaultIncludeSourceLocation)
+  def report(message: Seq[Any])(implicit loc: Location) = reportTagIfNeeded(assert(False, message, NOTE), reportDefaultIncludeSourceLocation)
+
+  def report(message: String, includeSourceLocation: Boolean)(implicit loc: Location)   = reportTagIfNeeded(assert(False, message, NOTE), includeSourceLocation)
+  def report(message: Seq[Any], includeSourceLocation: Boolean)(implicit loc: Location) = reportTagIfNeeded(assert(False, message, NOTE), includeSourceLocation)
+
+  def report(message: String,   severity: AssertNodeSeverity)(implicit loc: Location) = reportTagIfNeeded(assert(False, message, severity), reportDefaultIncludeSourceLocation)
+  def report(message: Seq[Any], severity: AssertNodeSeverity)(implicit loc: Location) = reportTagIfNeeded(assert(False, message, severity), reportDefaultIncludeSourceLocation)
+
+  def report(message: String,   severity: AssertNodeSeverity, includeSourceLocation: Boolean)(implicit loc: Location) = reportTagIfNeeded(assert(False, message, severity), includeSourceLocation)
+  def report(message: Seq[Any], severity: AssertNodeSeverity, includeSourceLocation: Boolean)(implicit loc: Location) = reportTagIfNeeded(assert(False, message, severity), includeSourceLocation)
 
 
   class TuplePimperBase(product: Product){

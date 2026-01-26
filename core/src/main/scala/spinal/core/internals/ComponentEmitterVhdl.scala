@@ -745,7 +745,13 @@ class ComponentEmitterVhdl(
             if (!spinalConfig.formalAsserts) {
               val cond = emitExpression(assertStatement.cond)
 
-              val message = assertStatement.message
+              val messageInput =
+                if (assertStatement.hasTag(reportIncludeSourceLocation))
+                  ReportSourceLocation.prefix(assertStatement.loc) +: assertStatement.message
+                else
+                  assertStatement.message
+
+              val message = messageInput
                 .map {
                   case m: String =>
                     "\"" +

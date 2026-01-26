@@ -219,6 +219,7 @@ case class SpinalConfig(mode                           : SpinalMode = null,
                         var withTimescale              : Boolean = true,
                         var printFilelist              : Boolean = true,
                         var emitFullComponentBindings  : Boolean = true,
+                        var reportIncludeSourceLocation: Boolean = false,
                         var svInterface                : Boolean = false
 ){
   def generate       [T <: Component](gen: => T): SpinalReport[T] = Spinal(this)(gen)

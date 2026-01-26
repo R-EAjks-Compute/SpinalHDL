@@ -43,6 +43,18 @@ object FAILURE  extends AssertNodeSeverity
 
 object REPORT_TIME
 
+object ReportSourceLocation {
+  def prefix(loc: Location): String = {
+    val file0 = loc.file
+    val file1 = if (file0.startsWith("file:")) file0.stripPrefix("file:") else file0
+    val fileWithExt0 =
+      if (file1.endsWith(".scala") || file1.endsWith(".sc")) file1
+      else file1 + ".scala"
+    val fileWithExt = fileWithExt0.replace('\\', '/')
+    s"$fileWithExt:${loc.line}: "
+  }
+}
+
 /** Min max base function */
 trait MinMaxProvider {
   def minValue: BigInt
@@ -843,6 +855,7 @@ object unusedTag                     extends SpinalTag
 object noCombinatorialLoopCheck      extends SpinalTag
 object noLatchCheck                  extends SpinalTag
 object noBackendCombMerge            extends SpinalTag
+object reportIncludeSourceLocation   extends SpinalTag{ override def allowMultipleInstance = false }
 
 /** Tag for clock crossing signals
   * @see [[https://spinalhdl.github.io/SpinalDoc-RTD/master/SpinalHDL/Structuring/clock_domain.html#clock-domain-crossing Clock domain crossing documentation]]
