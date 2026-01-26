@@ -766,7 +766,13 @@ class ComponentEmitterVerilog(
             val cond = emitExpression(assertStatement.cond)
 
             val includeLocation = assertStatement.hasTag(reportIncludeSourceLocation)
-            val locationPrefix = if (includeLocation) ReportSourceLocation.prefix(assertStatement.loc) else ""
+            val locationPrefix = if (includeLocation) {
+              val formatOverride = assertStatement.getTag(classOf[reportSourceLocationFormatTag]).map(_.format)
+              val format = formatOverride.getOrElse(spinalConfig.reportSourceLocationFormat)
+              ReportSourceLocation.prefix(format, assertStatement.loc, assertStatement.severity)
+            } else {
+              ""
+            }
             val messageInput = assertStatement.message
 
             val frontString = (for (m <- messageInput) yield m match {
@@ -805,7 +811,7 @@ class ComponentEmitterVerilog(
               /* Emulate them using $display */
               val zeroTimeCond = if (spinalConfig.noAssertAtTimeZero) " && $realtime != 0" else ""
               b ++= s"${tab}    if(!${cond}${zeroTimeCond}) begin\n"
-              val frontStringWithPrefix = if (includeLocation) s"$locationPrefix$severity $frontString" else s"$severity $frontString"
+              val frontStringWithPrefix = if (includeLocation) s"$locationPrefix$frontString" else s"$severity $frontString"
               b ++= s"""${tab}      $$display("$frontStringWithPrefix"$backString); // ${assertStatement.loc.file}.scala:L${assertStatement.loc.line}\n"""
               if (assertStatement.severity == `FAILURE`) b ++= tab + "      $finish;\n"
               b ++= s"${tab}    end\n"

@@ -44,14 +44,27 @@ object FAILURE  extends AssertNodeSeverity
 object REPORT_TIME
 
 object ReportSourceLocation {
-  def prefix(loc: Location): String = {
+  private def severityString(severity: AssertNodeSeverity): String = severity match {
+    case `NOTE`    => "NOTE"
+    case `WARNING` => "WARNING"
+    case `ERROR`   => "ERROR"
+    case `FAILURE` => "FAILURE"
+  }
+
+  private def fileWithExt(loc: Location): String = {
     val file0 = loc.file
     val file1 = if (file0.startsWith("file:")) file0.stripPrefix("file:") else file0
     val fileWithExt0 =
       if (file1.endsWith(".scala") || file1.endsWith(".sc")) file1
       else file1 + ".scala"
-    val fileWithExt = fileWithExt0.replace('\\', '/')
-    s"$fileWithExt:${loc.line}: "
+    fileWithExt0.replace('\\', '/')
+  }
+
+  def prefix(format: String, loc: Location, severity: AssertNodeSeverity): String = {
+    format
+      .replace("$FILE", fileWithExt(loc))
+      .replace("$LINE", loc.line.toString)
+      .replace("$SEVERITY", severityString(severity))
   }
 }
 
@@ -856,6 +869,9 @@ object noCombinatorialLoopCheck      extends SpinalTag
 object noLatchCheck                  extends SpinalTag
 object noBackendCombMerge            extends SpinalTag
 object reportIncludeSourceLocation   extends SpinalTag{ override def allowMultipleInstance = false }
+case class reportSourceLocationFormatTag(format: String) extends SpinalTag{
+  override def allowMultipleInstance = false
+}
 
 /** Tag for clock crossing signals
   * @see [[https://spinalhdl.github.io/SpinalDoc-RTD/master/SpinalHDL/Structuring/clock_domain.html#clock-domain-crossing Clock domain crossing documentation]]

@@ -746,10 +746,13 @@ class ComponentEmitterVhdl(
               val cond = emitExpression(assertStatement.cond)
 
               val messageInput =
-                if (assertStatement.hasTag(reportIncludeSourceLocation))
-                  ReportSourceLocation.prefix(assertStatement.loc) +: assertStatement.message
-                else
+                if (assertStatement.hasTag(reportIncludeSourceLocation)) {
+                  val formatOverride = assertStatement.getTag(classOf[reportSourceLocationFormatTag]).map(_.format)
+                  val format = formatOverride.getOrElse(spinalConfig.reportSourceLocationFormat)
+                  ReportSourceLocation.prefix(format, assertStatement.loc, assertStatement.severity) +: assertStatement.message
+                } else {
                   assertStatement.message
+                }
 
               val message = messageInput
                 .map {
