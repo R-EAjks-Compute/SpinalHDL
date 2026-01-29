@@ -2,7 +2,7 @@
 //| - com.typesafe:config:1.4.2
 package build
 
-import mill._, scalalib._, publish._
+import mill._, mill.api._, scalalib._, publish._
 import build.project.SpinalVersion
 
 trait SpinalModule extends SbtModule with CrossSbtModule { outer =>
@@ -24,19 +24,21 @@ trait SpinalModule extends SbtModule with CrossSbtModule { outer =>
   }
   def testOnly(args: String*) = test.testOnly(args*)
 
-  val moduleRefs = SpinalModuleRef(crossScalaVersion)
+  def moduleRefs = SpinalModuleRef.moduleDeps(crossScalaVersion)
+  def modulePluginOptions = SpinalModuleRef.scalacOptions(crossScalaVersion)
 }
 
-case class SpinalModuleRef(crossScalaVersion: String) {
-  // Default definitions for moduleDeps.  For projects that consume us as a
-  // foreign module (with a git submodule), override these to avoid building
-  // these modules multiple times
-  def coreMod = core(crossScalaVersion)
-  def libMod = lib(crossScalaVersion)
-  def simMod = sim(crossScalaVersion)
-  def idslpayloadMod = idslpayload(crossScalaVersion)
-  def idslpluginMod = idslplugin(crossScalaVersion)
-  def testerMod = tester(crossScalaVersion)
+object SpinalModuleRef {
+  def moduleDeps(crossScalaVersion: String): Map[String, ModuleRef[PublishModule]] = Map(
+    "core"        -> ModuleRef(core(crossScalaVersion)),
+    "lib"         -> ModuleRef(lib(crossScalaVersion)),
+    "sim"         -> ModuleRef(sim(crossScalaVersion)),
+    "idslpayload" -> ModuleRef(idslpayload(crossScalaVersion)),
+    "idslplugin"  -> ModuleRef(idslplugin(crossScalaVersion)),
+    "tester"      -> ModuleRef(tester(crossScalaVersion))
+  )
+
+  def scalacOptions(crossScalaVersion: String) = idslplugin(crossScalaVersion).pluginOptions
 }
 
 trait SpinalPublishModule extends PublishModule {
@@ -64,10 +66,9 @@ trait IdslPayload extends SpinalModule with SpinalPublishModule {
 
 object idslplugin extends Cross[IdslPlugin](SpinalVersion.compilers)
 trait IdslPlugin extends SpinalModule with SpinalPublishModule {
-  import moduleRefs._
   def mainClass = Some("spinal.idslplugin")
   override def artifactName = "spinalhdl-idsl-plugin"
-  def moduleDeps = Seq(idslpayloadMod)
+  def moduleDeps = Seq(moduleRefs("idslpayload")())
   def mvnDeps = super.mvnDeps() ++ Seq(mvn"org.scala-lang:scala-compiler:${scalaVersion}")
   def pluginOptions = Task { Seq(s"-Xplugin:${assembly().path}") }
 }
@@ -90,10 +91,9 @@ object lib extends Cross[Lib](SpinalVersion.compilers){
   def defaultCrossSegments = Seq(SpinalVersion.compilers.head)
 }
 trait Lib extends SpinalModule with SpinalPublishModule {
-  import moduleRefs._
   def mainClass = Some("spinal.lib")
-  def moduleDeps = Seq(coreMod, simMod)
-  def scalacOptions = super.scalacOptions() ++ idslpluginMod.pluginOptions()
+  def moduleDeps = Seq(moduleRefs("core")(), moduleRefs("sim")())
+  def scalacOptions = super.scalacOptions() ++ modulePluginOptions()
   def mvnDeps = super.mvnDeps() ++ Seq(mvn"commons-io:commons-io:2.11.0", mvn"org.scalatest::scalatest:${scalatestVersion}",
     mvn"io.github.zhaokunhu::ipxactscalacases:0.0.3")
   def publishVersion = SpinalVersion.lib
@@ -110,11 +110,10 @@ object core extends Cross[Core](SpinalVersion.compilers){
   def defaultCrossSegments = Seq(SpinalVersion.compilers.head)
 }
 trait Core extends SpinalModule with SpinalPublishModule {
-  import moduleRefs._
   def mainClass = Some("spinal.core")
-  def moduleDeps = Seq(idslpluginMod, simMod)
+  def moduleDeps = Seq(moduleRefs("idslplugin")(), moduleRefs("sim")())
 
-  def scalacOptions = super.scalacOptions() ++ idslpluginMod.pluginOptions()
+  def scalacOptions = super.scalacOptions() ++ modulePluginOptions()
   def mvnDeps = super.mvnDeps() ++ Seq(
     mvn"org.scala-lang:scala-reflect:${scalaVersion}",
     mvn"com.github.scopt::scopt:4.1.0",
@@ -140,10 +139,9 @@ object tester extends Cross[Tester](SpinalVersion.compilers){
   def defaultCrossSegments = Seq(SpinalVersion.compilers.head)
 }
 trait Tester extends SpinalModule with SpinalPublishModule {
-  import moduleRefs._
   def mainClass = Some("spinal.tester")
-  def moduleDeps = Seq(coreMod, simMod, libMod)
-  def scalacOptions = super.scalacOptions() ++ idslpluginMod.pluginOptions()
+  def moduleDeps = Seq(moduleRefs("core")(), moduleRefs("sim")(), moduleRefs("lib")())
+  def scalacOptions = super.scalacOptions() ++ modulePluginOptions()
   def mvnDeps = super.mvnDeps() ++ Seq(mvn"org.scalatest::scalatest:${scalatestVersion}")
   def publishVersion = SpinalVersion.tester
 }
