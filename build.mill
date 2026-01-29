@@ -29,13 +29,13 @@ trait SpinalModule extends SbtModule with CrossSbtModule { outer =>
 }
 
 object SpinalModuleRef {
-  def moduleDeps(crossScalaVersion: String): Map[String, ModuleRef[PublishModule]] = Map(
-    "core"        -> ModuleRef(core(crossScalaVersion)),
-    "lib"         -> ModuleRef(lib(crossScalaVersion)),
-    "sim"         -> ModuleRef(sim(crossScalaVersion)),
-    "idslpayload" -> ModuleRef(idslpayload(crossScalaVersion)),
-    "idslplugin"  -> ModuleRef(idslplugin(crossScalaVersion)),
-    "tester"      -> ModuleRef(tester(crossScalaVersion))
+  def moduleDeps(crossScalaVersion: String): Map[String, PublishModule] = Map(
+    "core"        -> core(crossScalaVersion),
+    "lib"         -> lib(crossScalaVersion),
+    "sim"         -> sim(crossScalaVersion),
+    "idslpayload" -> idslpayload(crossScalaVersion),
+    "idslplugin"  -> idslplugin(crossScalaVersion),
+    "tester"      -> tester(crossScalaVersion)
   )
 
   def scalacOptions(crossScalaVersion: String) = idslplugin(crossScalaVersion).pluginOptions
@@ -68,7 +68,7 @@ object idslplugin extends Cross[IdslPlugin](SpinalVersion.compilers)
 trait IdslPlugin extends SpinalModule with SpinalPublishModule {
   def mainClass = Some("spinal.idslplugin")
   override def artifactName = "spinalhdl-idsl-plugin"
-  def moduleDeps = Seq(moduleRefs("idslpayload")())
+  def moduleDeps = Seq(moduleRefs("idslpayload"))
   def mvnDeps = super.mvnDeps() ++ Seq(mvn"org.scala-lang:scala-compiler:${scalaVersion}")
   def pluginOptions = Task { Seq(s"-Xplugin:${assembly().path}") }
 }
@@ -92,7 +92,7 @@ object lib extends Cross[Lib](SpinalVersion.compilers){
 }
 trait Lib extends SpinalModule with SpinalPublishModule {
   def mainClass = Some("spinal.lib")
-  def moduleDeps = Seq(moduleRefs("core")(), moduleRefs("sim")())
+  def moduleDeps = Seq(moduleRefs("core"), moduleRefs("sim"))
   def scalacOptions = super.scalacOptions() ++ modulePluginOptions()
   def mvnDeps = super.mvnDeps() ++ Seq(mvn"commons-io:commons-io:2.11.0", mvn"org.scalatest::scalatest:${scalatestVersion}",
     mvn"io.github.zhaokunhu::ipxactscalacases:0.0.3")
@@ -111,7 +111,7 @@ object core extends Cross[Core](SpinalVersion.compilers){
 }
 trait Core extends SpinalModule with SpinalPublishModule {
   def mainClass = Some("spinal.core")
-  def moduleDeps = Seq(moduleRefs("idslplugin")(), moduleRefs("sim")())
+  def moduleDeps = Seq(moduleRefs("idslplugin"), moduleRefs("sim"))
 
   def scalacOptions = super.scalacOptions() ++ modulePluginOptions()
   def mvnDeps = super.mvnDeps() ++ Seq(
@@ -140,7 +140,7 @@ object tester extends Cross[Tester](SpinalVersion.compilers){
 }
 trait Tester extends SpinalModule with SpinalPublishModule {
   def mainClass = Some("spinal.tester")
-  def moduleDeps = Seq(moduleRefs("core")(), moduleRefs("sim")(), moduleRefs("lib")())
+  def moduleDeps = Seq(moduleRefs("core"), moduleRefs("sim"), moduleRefs("lib"))
   def scalacOptions = super.scalacOptions() ++ modulePluginOptions()
   def mvnDeps = super.mvnDeps() ++ Seq(mvn"org.scalatest::scalatest:${scalatestVersion}")
   def publishVersion = SpinalVersion.tester
