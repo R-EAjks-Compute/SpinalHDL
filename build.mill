@@ -24,11 +24,14 @@ trait SpinalModule extends SbtModule with CrossSbtModule { outer =>
   }
   def testOnly(args: String*) = test.testOnly(args*)
 
-  def moduleRefs = SpinalModuleRef.moduleDeps(crossScalaVersion)
-  def modulePluginOptions = SpinalModuleRef.scalacOptions(crossScalaVersion)
+  def moduleInfo = SpinalModuleInfo(crossScalaVersion)
+  def moduleRefs = moduleInfo._1
+  def modulePluginOptions = moduleInfo._2()
 }
 
-object SpinalModuleRef {
+object SpinalModuleInfo {
+  def apply(crossScalaVersion: String) = (moduleDeps(crossScalaVersion), () => scalacOptions(crossScalaVersion))
+
   def moduleDeps(crossScalaVersion: String): Map[String, PublishModule] = Map(
     "core"        -> core(crossScalaVersion),
     "lib"         -> lib(crossScalaVersion),
