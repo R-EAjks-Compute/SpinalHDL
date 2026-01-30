@@ -29,6 +29,7 @@ trait SpinalModule extends SbtModule with CrossSbtModule { outer =>
   def modulePluginOptions = moduleInfo._2()
 }
 
+type SpinalModuleInfoType = Tuple2[Map[String, PublishModule], () => T[Seq[String]]]
 object SpinalModuleInfo {
   def apply(crossScalaVersion: String) = (moduleDeps(crossScalaVersion), () => scalacOptions(crossScalaVersion))
 
