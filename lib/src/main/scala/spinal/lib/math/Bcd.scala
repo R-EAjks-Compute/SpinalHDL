@@ -21,6 +21,7 @@
 package spinal.lib.math
 
 import spinal.core._
+import scala.collection.Seq
 
 
 /** Binary-Coded Decimal (BCD) data type, where each decimal digit is stored in 4 bits.
