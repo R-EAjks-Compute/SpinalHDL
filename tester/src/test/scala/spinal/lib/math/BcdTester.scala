@@ -1,6 +1,8 @@
-package spinal.core
+package spinal.lib.math
 
+import spinal.core._
 import spinal.core.sim._
+import spinal.lib.sim._
 import spinal.tester.SpinalAnyFunSuite
 import scala.util.Random
 

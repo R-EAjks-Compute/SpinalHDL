@@ -18,7 +18,9 @@
 **      You should have received a copy of the GNU Lesser General Public     **
 **    License along with this library.                                       **
 \*                                                                           */
-package spinal.core
+package spinal.lib.math
+
+import spinal.core._
 
 
 /** Binary-Coded Decimal (BCD) data type, where each decimal digit is stored in 4 bits.
