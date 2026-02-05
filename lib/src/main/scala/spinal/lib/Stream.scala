@@ -2119,10 +2119,10 @@ object StreamWidthAdapter {
   def apply[T <: Data,T2 <: Data](input : Stream[T],output : Stream[T2], endianness: Endianness = LITTLE, padding : Boolean = false): Unit = {
     val inputWidth = widthOf(input.payload)
     val outputWidth = widthOf(output.payload)
-    if(inputWidth == outputWidth){
+    if(inputWidth == outputWidth) {
       output.arbitrationFrom(input)
       output.payload.assignFromBits(input.payload.asBits)
-    } else if(inputWidth > outputWidth){
+    } else if(inputWidth > outputWidth) new Composite(input, "widthAdapter") {
       require(inputWidth % outputWidth == 0 || padding)
       val factor = (inputWidth + outputWidth - 1) / outputWidth
       val paddedInputWidth = factor * outputWidth
@@ -2133,7 +2133,7 @@ object StreamWidthAdapter {
         case `BIG`    => output.payload.assignFromBits(input.payload.asBits.resize(paddedInputWidth).subdivideIn(factor slices).reverse.read(counter))
       }
       input.ready := output.ready && counter.willOverflowIfInc
-    } else{
+    } else new Composite(input, "widthAdapter"){
       require(outputWidth % inputWidth == 0 || padding)
       val factor  = (outputWidth + inputWidth - 1) / inputWidth
       val paddedOutputWidth = factor * inputWidth
