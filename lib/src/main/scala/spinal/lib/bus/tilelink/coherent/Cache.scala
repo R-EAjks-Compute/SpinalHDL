@@ -408,7 +408,7 @@ class Cache(val p : CacheParam) extends Component {
       val victim, primary, acquire, victimRead, victimWrite, cacheWrite = Reg(Bool())
       val flushBus = withFlushBus generate Reg(Bool())
 
-      val flags = ArrayBuffer[Bool](victim, acquire, primary, victimWrite, cacheWrite)
+      val flags = ArrayBuffer[Bool](victim, acquire, primary, victimRead, victimWrite, cacheWrite)
       if(withFlushBus) flags += flushBus
       fire setWhen(flags.norR)
     }
@@ -434,6 +434,18 @@ class Cache(val p : CacheParam) extends Component {
       val write = ram.writePort()
     }
     val fullUpA = slots.dropRight(p.generalSlotCountUpCOnly).map(_.valid).andR
+
+//    val debug = new Area{
+//      val timeout = B(slots.map(_.pending.timeout.state))
+//      val valid = B(slots.map(_.valid))
+//      val victim = B(slots.map(_.pending.victim))
+//      val primary = B(slots.map(_.pending.primary))
+//      val acquire = B(slots.map(_.pending.acquire))
+//      val victimRead = B(slots.map(_.pending.victimRead))
+//      val victimWrite = B(slots.map(_.pending.victimWrite))
+//      val cacheWrite = B(slots.map(_.pending.cacheWrite))
+//      val flushBus = withFlushBus generate B(slots.map(_.pending.flushBus))
+//    }
   }
 
   val fromFlushBus = withFlushBus generate new Area {
@@ -793,10 +805,25 @@ class Cache(val p : CacheParam) extends Component {
 
       val upAHold = False
 
+      val loopbackPop = loopback.fifo.io.pop.halfPipe()
+
       val cmds = ArrayBuffer[Stream[CtrlCmd]]()
       cmds += prober.schedule.toCtrl.pipelined(m2s = true, s2m = true)
-      cmds += loopback.fifo.io.pop.halfPipe()
       cmds += fromUpA.toCtrl.continueWhen(loopback.allowUpA && !upAHold)
+      cmds += loopbackPop
+
+      val onLoopback = new Area{
+        val regulator = Reg(UInt(2 bits)) init(0)
+        when(loopbackPop.valid){
+          when(fromUpA.toCtrl.fire) {
+            regulator := regulator + 1
+          }
+          when(loopbackPop.ready) {
+            regulator := 0
+          }
+          upAHold setWhen(regulator.andR)
+        }
+      }
 
       val onFlushBus = withFlushBus generate new Area{
         val regulator = Reg(UInt(2 bits)) init(0)
@@ -1779,7 +1806,7 @@ class Cache(val p : CacheParam) extends Component {
       toUpD.source  := CTX.sourceId
       toUpD.sink    := CMD.source.resized
       toUpD.size    := CTX.size
-      toUpD.denied  := CMD.denied
+      toUpD.denied  := False
       toUpD.data    := CMD.data
       toUpD.corrupt := CMD.corrupt
 

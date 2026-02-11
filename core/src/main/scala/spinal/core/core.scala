@@ -565,11 +565,44 @@ package object core extends BaseTypeFactory with BaseTypeCast {
 //    if(cond.dlcIsEmpty || !cond.head.source.isInstanceOf[Operator.Formal.InitState])
 //      cond.setName("when_" + loc.file + "_l" + loc.line, Nameable.REMOVABLE)
 
-  def report(message: String)   = assert(False, message, NOTE)
-  def report(message: Seq[Any]) = assert(False, message, NOTE)
+  private def reportDefaultIncludeSourceLocation: Boolean = {
+    val gd = GlobalData.get
+    gd != null && gd.config.reportIncludeSourceLocation
+  }
 
-  def report(message: String,   severity: AssertNodeSeverity) = assert(False, message, severity)
-  def report(message: Seq[Any], severity: AssertNodeSeverity) = assert(False, message, severity)
+  private def reportTagIfNeeded(statement: AssertStatement, includeSourceLocation: Boolean, sourceLocationFormat: String): AssertStatement = {
+    if (includeSourceLocation) {
+      statement.addTag(reportIncludeSourceLocation)
+      if (sourceLocationFormat != null) statement.addTag(reportSourceLocationFormatTag(sourceLocationFormat))
+    }
+    statement
+  }
+
+  def report(message: String)(implicit loc: Location)   = reportTagIfNeeded(assert(False, message, NOTE), reportDefaultIncludeSourceLocation, null)
+  def report(message: Seq[Any])(implicit loc: Location) = reportTagIfNeeded(assert(False, message, NOTE), reportDefaultIncludeSourceLocation, null)
+
+  def report(message: String, includeSourceLocation: Boolean)(implicit loc: Location)   = reportTagIfNeeded(assert(False, message, NOTE), includeSourceLocation, null)
+  def report(message: Seq[Any], includeSourceLocation: Boolean)(implicit loc: Location) = reportTagIfNeeded(assert(False, message, NOTE), includeSourceLocation, null)
+
+  def report(message: String, includeSourceLocation: Boolean, sourceLocationFormat: String)(implicit loc: Location) =
+    reportTagIfNeeded(assert(False, message, NOTE), includeSourceLocation, sourceLocationFormat)
+  def report(message: Seq[Any], includeSourceLocation: Boolean, sourceLocationFormat: String)(implicit loc: Location) =
+    reportTagIfNeeded(assert(False, message, NOTE), includeSourceLocation, sourceLocationFormat)
+
+  def report(message: String,   severity: AssertNodeSeverity)(implicit loc: Location) =
+    reportTagIfNeeded(assert(False, message, severity), reportDefaultIncludeSourceLocation, null)
+  def report(message: Seq[Any], severity: AssertNodeSeverity)(implicit loc: Location) =
+    reportTagIfNeeded(assert(False, message, severity), reportDefaultIncludeSourceLocation, null)
+
+  def report(message: String,   severity: AssertNodeSeverity, includeSourceLocation: Boolean)(implicit loc: Location) =
+    reportTagIfNeeded(assert(False, message, severity), includeSourceLocation, null)
+  def report(message: Seq[Any], severity: AssertNodeSeverity, includeSourceLocation: Boolean)(implicit loc: Location) =
+    reportTagIfNeeded(assert(False, message, severity), includeSourceLocation, null)
+
+  def report(message: String,   severity: AssertNodeSeverity, includeSourceLocation: Boolean, sourceLocationFormat: String)(implicit loc: Location) =
+    reportTagIfNeeded(assert(False, message, severity), includeSourceLocation, sourceLocationFormat)
+  def report(message: Seq[Any], severity: AssertNodeSeverity, includeSourceLocation: Boolean, sourceLocationFormat: String)(implicit loc: Location) =
+    reportTagIfNeeded(assert(False, message, severity), includeSourceLocation, sourceLocationFormat)
 
 
   class TuplePimperBase(product: Product){
@@ -659,6 +692,52 @@ package object core extends BaseTypeFactory with BaseTypeCast {
         String.format(fmt, obj.asInstanceOf[AnyRef])
       }
       formatted.mkString
+    }
+  }
+
+  /**
+   * Extension methods for register simulation initialization
+   */
+  implicit class DataSimInitPimper[T <: Data](data: T) {
+    /**
+     * Set simulation initial value for registers
+     *
+     * @param that Initial value for simulation (supports same types as init())
+     * @return The register itself for chaining
+     *
+     * @example {{{
+     * val counter = Reg(UInt(8 bits)).simInit(0x32)
+     * val reg = Reg(UInt(8 bits)).init(0x00).simInit(0x32)
+     * }}}
+     */
+    def simInit(that: T): T = {
+      require(data.flatten.forall(_.isReg), "simInit can only be applied to registers")
+      
+      // Extract literal values from expressions
+      def findLiteral(expr: Expression): Expression = expr match {
+        case lit: Literal => lit
+        case bt: BaseType => {
+          if (Statement.isSomethingToFullStatement(bt)) {
+            findLiteral(bt.head.source)
+          } else {
+            expr
+          }
+        }
+        case _ => expr
+      }
+      
+      (data, that) match {
+        case (reg: BaseType, value: BaseType) if data.flatten.length == 1 =>
+          val literalValue = findLiteral(value)
+          reg.addTag(SimInitTag(literalValue))
+        case _ =>
+          for ((regElement, valueElement) <- (data.flatten, that.flatten).zipped) {
+            val literalValue = findLiteral(valueElement)
+            regElement.addTag(SimInitTag(literalValue))
+          }
+      }
+      
+      data
     }
   }
 }
